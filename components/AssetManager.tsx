@@ -28,7 +28,8 @@ interface AssetManagerProps {
   assets: Asset[];
   employees: Employee[];
   companies: Company[];
-  onAdd: (asset: Omit<Asset, 'id' | 'createdAt' | 'qrCode'>) => void;
+  // Fix: Allow an optional id property in the onAdd callback to support manual asset ID assignment, especially for bulk operations.
+  onAdd: (asset: Omit<Asset, 'id' | 'createdAt' | 'qrCode'> & { id?: string }) => void;
   onUpdate: (asset: Asset) => void;
   onRemove: (id: string) => void;
 }
@@ -99,8 +100,10 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
       return;
     }
 
+    // Fix: Pass the manually entered 'id' from the bulk row to the onAdd function.
     bulkEntries.forEach(entry => {
       onAdd({
+        id: entry.id,
         companyId: entry.companyId,
         type: entry.type,
         brand: entry.brand,
