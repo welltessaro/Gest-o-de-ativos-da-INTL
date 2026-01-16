@@ -28,7 +28,6 @@ interface AssetManagerProps {
   assets: Asset[];
   employees: Employee[];
   companies: Company[];
-  // Fix: Allow an optional id property in the onAdd callback to support manual asset ID assignment, especially for bulk operations.
   onAdd: (asset: Omit<Asset, 'id' | 'createdAt' | 'qrCode'> & { id?: string }) => void;
   onUpdate: (asset: Asset) => void;
   onRemove: (id: string) => void;
@@ -100,7 +99,6 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
       return;
     }
 
-    // Fix: Pass the manually entered 'id' from the bulk row to the onAdd function.
     bulkEntries.forEach(entry => {
       onAdd({
         id: entry.id,
@@ -133,7 +131,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
           .container { max-width: 210mm; margin: 0 auto; border: 4px solid #000; padding: 40px; min-height: 297mm; box-sizing: border-box; }
           .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 4px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
           .header h1 { margin: 0; font-size: 32px; font-weight: 900; text-transform: uppercase; letter-spacing: -1px; }
-          .header p { margin: 5px 0 0; font-size: 16px; font-weight: bold; font-style: italic; color: #475569; }
+          .header p { margin: 5px 0 0; font-size: 16px; font-weight: bold; font-style: italic; color: #1e293b; }
           .header-info { text-align: right; font-size: 12px; font-weight: 900; text-transform: uppercase; }
           .header-info div { margin-bottom: 5px; }
           table { width: 100%; border-collapse: collapse; border: 2px solid #000; }
@@ -142,7 +140,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
           .col-status { width: 80px; text-align: center; font-size: 9px; font-weight: bold; }
           .tips { margin-top: 40px; padding: 20px; background: #f8fafc; border: 2px solid #000; border-radius: 8px; font-size: 11px; font-weight: bold; line-height: 1.6; }
           .tips-title { color: #2563eb; text-transform: uppercase; font-weight: 900; margin-bottom: 8px; }
-          .footer-note { margin-top: 60px; text-align: center; font-size: 9px; color: #94a3b8; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+          .footer-note { margin-top: 60px; text-align: center; font-size: 9px; color: #1e293b; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
           @media print {
             body { padding: 0; }
             .container { border: none; padding: 0; }
@@ -197,10 +195,6 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
             Documento de Controle Interno — AssetTrack Pro Enterprise Asset Management
           </div>
         </div>
-        <script>
-          // Autoprint opcional se aberto no navegador
-          // window.print();
-        </script>
       </body>
       </html>
     `;
@@ -237,14 +231,13 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
 
   return (
     <div className="space-y-6 relative">
-      {/* TOOLBAR */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 print:hidden">
         <div className="relative flex-1 max-w-md w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 w-5 h-5" />
           <input 
             type="text" 
             placeholder="Buscar por modelo, marca ou ID..." 
-            className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
+            className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-600 outline-none transition-all shadow-sm font-semibold placeholder:text-slate-600"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -254,23 +247,23 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
           <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
              <button 
                 onClick={handleDownloadCollectionSheet}
-                className="flex items-center gap-2 px-4 py-2 text-xs font-black text-blue-600 hover:bg-blue-50 rounded-xl transition-all uppercase tracking-widest group"
+                className="flex items-center gap-2 px-4 py-2 text-xs font-black text-blue-700 hover:bg-blue-50 rounded-xl transition-all uppercase tracking-widest group"
              >
                 <FileDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
                 Guia de Coleta
              </button>
              <button 
                 onClick={() => setShowBulkModal(true)}
-                className="flex items-center gap-2 px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 rounded-xl transition-all uppercase tracking-widest"
+                className="flex items-center gap-2 px-4 py-2 text-xs font-black text-slate-800 hover:bg-slate-50 rounded-xl transition-all uppercase tracking-widest"
              >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
                 Lançar Levantamento
              </button>
           </div>
 
           <button 
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-blue-200"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-black transition-all shadow-lg shadow-blue-200 uppercase tracking-widest text-xs"
           >
             <Plus className="w-5 h-5" />
             <span>Novo Ativo</span>
@@ -278,20 +271,19 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
         </div>
       </div>
 
-      {/* ASSET TABLE */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden print:hidden">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden print:hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-50 border-b border-slate-100">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Ativo / Empresa</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Tipo</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Marca/Modelo</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Ações</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Ativo / Empresa</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Tipo</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Marca/Modelo</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Status</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 bg-white">
               {filteredAssets.map((asset) => (
                 <tr 
                   key={asset.id} 
@@ -300,28 +292,28 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex flex-col">
-                      <span className="font-bold text-slate-800 group-hover:text-blue-700">{asset.id}</span>
-                      <div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold uppercase">
+                      <span className="font-black text-slate-900 group-hover:text-blue-700">{asset.id}</span>
+                      <div className="flex items-center gap-1 text-[10px] text-slate-700 font-black uppercase">
                         <Building2 className="w-3 h-3" />
                         {getCompanyName(asset.companyId)}
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-slate-600">{asset.type}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-xs font-black text-slate-800">{asset.type}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="font-medium text-slate-800">{asset.brand}</span>
-                    <span className="text-sm text-slate-500 ml-2">{asset.model}</span>
+                    <span className="font-bold text-slate-900">{asset.brand}</span>
+                    <span className="text-sm text-slate-700 ml-2 font-medium">{asset.model}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
-                      asset.status === 'Disponível' ? 'bg-emerald-100 text-emerald-600' :
-                      asset.status === 'Em Uso' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border ${
+                      asset.status === 'Disponível' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                      asset.status === 'Em Uso' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-700 border-slate-200'
                     }`}>
                       {asset.status}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <button onClick={(e) => {e.stopPropagation(); onRemove(asset.id)}} className="p-2 text-slate-300 hover:text-rose-500 transition-colors">
+                    <button onClick={(e) => {e.stopPropagation(); onRemove(asset.id)}} className="p-2 text-slate-500 hover:text-rose-600 transition-colors">
                       <Trash2 className="w-5 h-5" />
                     </button>
                   </td>
@@ -332,7 +324,6 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
         </div>
       </div>
 
-      {/* MODAL: LANÇAMENTO EM LOTE */}
       {showBulkModal && (
         <div className="fixed inset-0 z-[200] flex flex-col bg-slate-900/95 backdrop-blur-xl animate-in fade-in duration-300 print:hidden">
           <div className="h-20 bg-slate-800/50 border-b border-white/10 flex items-center justify-between px-8 text-white">
@@ -342,7 +333,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                </div>
                <div>
                   <h3 className="font-black tracking-tight">Lançamento em Lote</h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Transcreva os dados coletados em campo</p>
+                  <p className="text-[10px] text-slate-200 font-black uppercase tracking-widest">Transcreva os dados coletados em campo</p>
                </div>
             </div>
             <button onClick={() => setShowBulkModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
@@ -353,12 +344,12 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
           <div className="flex-1 overflow-auto p-8">
              <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-200">
                 <table className="w-full text-left">
-                   <thead className="bg-slate-50 border-b border-slate-100">
+                   <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase w-48">Empresa / Tipo</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase">Marca / Modelo</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase w-32">ID Patrimonial</th>
-                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase">Vincular Usuário</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-800 uppercase w-48 tracking-widest">Empresa / Tipo</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-800 uppercase tracking-widest">Marca / Modelo</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-800 uppercase w-32 tracking-widest">ID Patrimonial</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-800 uppercase tracking-widest">Vincular Usuário</th>
                         <th className="px-6 py-4 text-right"></th>
                       </tr>
                    </thead>
@@ -367,7 +358,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                         <tr key={entry.tempId} className="hover:bg-slate-50/50 transition-colors">
                            <td className="px-6 py-4 space-y-2">
                               <select 
-                                className="w-full p-2 bg-slate-100 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full p-2 bg-slate-100 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900"
                                 value={entry.companyId}
                                 onChange={e => {
                                   const newEntries = [...bulkEntries];
@@ -378,7 +369,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                               </select>
                               <select 
-                                className="w-full p-2 bg-white rounded-xl text-xs font-bold border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full p-2 bg-white rounded-xl text-xs font-bold border border-slate-300 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900"
                                 value={entry.type}
                                 onChange={e => {
                                   const newEntries = [...bulkEntries];
@@ -391,7 +382,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                            </td>
                            <td className="px-6 py-4 space-y-2">
                               <input 
-                                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full p-2 bg-white border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 placeholder:text-slate-600"
                                 placeholder="Marca (Ex: Dell)"
                                 value={entry.brand}
                                 onChange={e => {
@@ -401,7 +392,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                                 }}
                               />
                               <input 
-                                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full p-2 bg-white border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 placeholder:text-slate-600"
                                 placeholder="Modelo (Ex: G15)"
                                 value={entry.model}
                                 onChange={e => {
@@ -413,7 +404,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                            </td>
                            <td className="px-6 py-4">
                               <input 
-                                className="w-full p-2 bg-slate-100 border-none rounded-xl text-xs font-mono font-black outline-none focus:ring-2 focus:ring-emerald-500 text-center uppercase"
+                                className="w-full p-2 bg-slate-100 border border-slate-300 rounded-xl text-xs font-mono font-black outline-none focus:ring-2 focus:ring-emerald-500 text-center uppercase text-slate-900"
                                 placeholder="ID-001"
                                 value={entry.id}
                                 onChange={e => {
@@ -425,7 +416,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                            </td>
                            <td className="px-6 py-4">
                               <select 
-                                className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full p-2 bg-white border border-slate-300 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900"
                                 value={entry.assignedTo}
                                 onChange={e => {
                                   const newEntries = [...bulkEntries];
@@ -442,7 +433,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                            <td className="px-6 py-4 text-right">
                               <button 
                                 onClick={() => handleBulkRemoveRow(entry.tempId)}
-                                className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
+                                className="p-2 text-slate-500 hover:text-rose-600 transition-colors"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -451,17 +442,17 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                       ))}
                    </tbody>
                 </table>
-                <div className="p-6 bg-slate-50 flex items-center justify-between border-t border-slate-100">
+                <div className="p-6 bg-slate-50 flex items-center justify-between border-t border-slate-200">
                    <button 
                     onClick={handleBulkAddRow}
-                    className="flex items-center gap-2 text-emerald-600 font-black text-xs uppercase tracking-widest hover:underline"
+                    className="flex items-center gap-2 text-emerald-700 font-black text-xs uppercase tracking-widest hover:underline"
                    >
                       <PlusCircle className="w-5 h-5" /> Adicionar mais um item
                    </button>
                    <div className="flex gap-4">
                       <button 
                         onClick={() => setShowBulkModal(false)}
-                        className="px-8 py-3 rounded-2xl font-bold text-slate-400 hover:text-slate-600 transition-colors"
+                        className="px-8 py-3 rounded-2xl font-black text-slate-700 hover:text-slate-900 transition-colors uppercase text-xs tracking-widest"
                       >
                         Cancelar
                       </button>
@@ -478,46 +469,45 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
         </div>
       )}
 
-      {/* MODAL PADRÃO DE NOVO ATIVO (MANTIDO) */}
       {showForm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
-            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <div className="p-8 border-b border-slate-200 flex justify-between items-center bg-slate-50">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl">
                   <Plus className="w-6 h-6" />
                 </div>
                 <div>
-                   <h3 className="text-2xl font-black text-slate-800 tracking-tight">Onboarding de Ativo</h3>
-                   <p className="text-slate-500 text-sm font-medium">Cadastre um novo dispositivo individualmente.</p>
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tight">Onboarding de Ativo</h3>
+                   <p className="text-slate-700 text-sm font-bold">Cadastre um novo dispositivo individualmente.</p>
                 </div>
               </div>
-              <button onClick={() => setShowForm(false)} className="p-3 hover:bg-slate-200 rounded-full transition-colors">
-                <X className="w-6 h-6 text-slate-500" />
+              <button onClick={() => setShowForm(false)} className="p-3 hover:bg-slate-200 rounded-full transition-colors text-slate-500 hover:text-slate-900">
+                <X className="w-6 h-6" />
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-10 overflow-y-auto space-y-8">
+            <form onSubmit={handleSubmit} className="p-10 overflow-y-auto space-y-8 bg-white">
                <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2 col-span-full">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Empresa Unidade</label>
-                      <select className="w-full p-4 rounded-2xl border border-slate-200 bg-white font-bold" value={newAsset.companyId} onChange={(e) => setNewAsset({...newAsset, companyId: e.target.value})} required>
+                      <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Empresa Unidade</label>
+                      <select className="w-full p-4 rounded-2xl border border-slate-300 bg-white font-bold text-slate-900 focus:ring-2 focus:ring-blue-600" value={newAsset.companyId} onChange={(e) => setNewAsset({...newAsset, companyId: e.target.value})} required>
                         {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo</label>
-                      <select className="w-full p-4 rounded-2xl border border-slate-200 bg-white font-bold" value={newAsset.type} onChange={(e) => setNewAsset({...newAsset, type: e.target.value as AssetType})} required>
+                      <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Tipo</label>
+                      <select className="w-full p-4 rounded-2xl border border-slate-300 bg-white font-bold text-slate-900 focus:ring-2 focus:ring-blue-600" value={newAsset.type} onChange={(e) => setNewAsset({...newAsset, type: e.target.value as AssetType})} required>
                         {ASSET_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Marca</label>
-                      <input className="w-full p-4 rounded-2xl border border-slate-200 font-bold" value={newAsset.brand || ''} onChange={(e) => setNewAsset({...newAsset, brand: e.target.value})} required />
+                      <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest ml-1">Marca</label>
+                      <input className="w-full p-4 rounded-2xl border border-slate-300 font-bold text-slate-900 focus:ring-2 focus:ring-blue-600" value={newAsset.brand || ''} onChange={(e) => setNewAsset({...newAsset, brand: e.target.value})} required />
                     </div>
                   </div>
-                  <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-blue-100 uppercase tracking-widest transition-all active:scale-95">Finalizar Cadastro</button>
+                  <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-blue-100 uppercase tracking-widest transition-all active:scale-95 text-sm">Finalizar Cadastro</button>
                </div>
             </form>
           </div>
