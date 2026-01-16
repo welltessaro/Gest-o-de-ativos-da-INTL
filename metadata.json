@@ -1,0 +1,7 @@
+{
+  "name": "AssetTrack Pro - Gestão de Ativos TI",
+  "description": "Uma plataforma completa para gestão de ativos de TI, controle de inventário, solicitações de equipamentos e dashboards analíticos para diretoria.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
