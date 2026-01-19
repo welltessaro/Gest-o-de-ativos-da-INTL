@@ -69,6 +69,7 @@ const deflateAsset = (asset: Asset) => {
   
   return {
     ...dbReady,
+    // Garante que se assignedTo for undefined/vazio, ele vá como null para o Postgres
     assignedTo: dbReady.assignedTo || null,
     departmentId: dbReady.departmentId || null,
     observations: `${cleanObs}\n\n${DATA_MARKER}\n${encodedData}`

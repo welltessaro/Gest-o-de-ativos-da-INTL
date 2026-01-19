@@ -177,9 +177,16 @@ const App: React.FC = () => {
     const oldAsset = assets.find(a => a.id === updated.id);
     let finalAsset = { ...updated };
 
-    // Regra Crítica: 'Baixado' e 'Manutenção' são status finais/temporários protegidos
-    // Só alteramos para 'Em Uso' ou 'Disponível' se o status atual NÃO for um dos protegidos
-    if (finalAsset.status !== 'Baixado' && finalAsset.status !== 'Manutenção') {
+    // LÓGICA DE PROTEÇÃO DE STATUS CRÍTICO
+    if (finalAsset.status === 'Baixado') {
+      // Se for baixa, limpa obrigatoriamente vínculos para evitar erros de integridade e inconsistência visual
+      finalAsset.assignedTo = undefined;
+      // Mantemos o departmentId apenas se for necessário para histórico de custos, 
+      // mas geralmente ativos baixados saem do centro de custo.
+    } else if (finalAsset.status === 'Manutenção') {
+      // Se estiver em manutenção, mantemos o status manual vindo do componente
+    } else {
+      // Lógica automática para outros estados
       if (finalAsset.assignedTo) {
         finalAsset.status = 'Em Uso';
         const emp = employees.find(e => e.id === finalAsset.assignedTo);
@@ -189,8 +196,17 @@ const App: React.FC = () => {
       }
     }
 
-    await db.assets.upsert(finalAsset);
-    setAssets(prev => (prev || []).map(a => a.id === finalAsset.id ? finalAsset : a));
+    try {
+      console.log(`[AssetUpdate] Persistindo ${finalAsset.id} com status ${finalAsset.status}`);
+      await db.assets.upsert(finalAsset);
+      setAssets(prev => {
+        const next = (prev || []).map(a => a.id === finalAsset.id ? { ...finalAsset } : a);
+        return [...next];
+      });
+    } catch (err: any) {
+      console.error("Falha ao atualizar ativo no Supabase:", err);
+      throw err;
+    }
   };
 
   const handleRemoveAsset = async (id: string) => {
@@ -206,11 +222,9 @@ const App: React.FC = () => {
   };
 
   const handleUpdateRequest = async (req: EquipmentRequest) => {
-    // 1. Persistir a atualização da requisição
     await db.requests.upsert(req);
     setRequests(prev => (prev || []).map(r => r.id === req.id ? req : r));
 
-    // 2. Lógica de Negócio: Se a requisição foi ENTREGUE, atualizar os ativos vinculados
     if (req.status === 'Entregue') {
       const employee = employees.find(e => e.id === req.employeeId);
       if (!employee) return;
@@ -225,7 +239,7 @@ const App: React.FC = () => {
               ...asset,
               status: 'Em Uso',
               assignedTo: employee.id,
-              departmentId: employee.departmentId, // O patrimônio acompanha o centro de custo do funcionário
+              departmentId: employee.departmentId,
               history: [
                 ...(asset.history || []),
                 {
@@ -241,7 +255,6 @@ const App: React.FC = () => {
         }
       });
 
-      // Atualizar ativos no banco e no estado global
       if (assetsToUpdate.length > 0) {
         for (const asset of assetsToUpdate) {
           await db.assets.upsert(asset);

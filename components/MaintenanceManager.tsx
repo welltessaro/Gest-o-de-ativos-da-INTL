@@ -45,10 +45,7 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
   const [selectedAssetId, setSelectedAssetId] = useState('');
   const [detailAsset, setDetailAsset] = useState<Asset | null>(null);
   
-  const [maintenanceType, setMaintenanceType] = useState<'Preventiva' | 'Corretiva'>('Preventiva');
-  const [maintenanceScope, setMaintenanceScope] = useState<'Interna' | 'Externa'>('Interna');
   const [reason, setReason] = useState('');
-  
   const [finalDiagnosis, setFinalDiagnosis] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPOForm, setShowPOForm] = useState(false);
@@ -79,10 +76,10 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
     setIsSubmitting(true);
     try {
       const historyEntry: HistoryEntry = {
-        id: Math.random().toString(),
+        id: `HIST-${Date.now()}`,
         date: new Date().toISOString(),
         type: 'Manutenção',
-        description: `Início de manutenção ${maintenanceType} (${maintenanceScope}). Motivo: ${reason}`,
+        description: `Entrada em manutenção: ${reason}`,
         performedBy: currentUser.name
       };
 
@@ -98,7 +95,7 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
       setSelectedAssetId('');
       setReason('');
     } catch (error) {
-      alert("Erro ao iniciar manutenção. Verifique sua conexão.");
+      alert("Erro ao iniciar manutenção.");
     } finally {
       setIsSubmitting(false);
     }
@@ -107,37 +104,38 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
   const handleConcludeMaintenance = async () => {
     if (!detailAsset) return;
     
-    if (!finalDiagnosis.trim()) {
+    const diagnosis = finalDiagnosis.trim();
+    if (!diagnosis) {
       setValidationError(true);
-      alert("Por favor, preencha o laudo técnico antes de concluir.");
       return;
     }
 
     setIsSubmitting(true);
+    setValidationError(false);
     try {
       const historyEntry: HistoryEntry = {
-        id: Math.random().toString(),
+        id: `HIST-CONC-${Date.now()}`,
         date: new Date().toISOString(),
         type: 'Manutenção',
-        description: `Manutenção concluída: ${finalDiagnosis}`,
+        description: `Manutenção concluída. Laudo: ${diagnosis}`,
         performedBy: currentUser.name
       };
 
       const updatedAsset: Asset = {
         ...detailAsset,
         status: 'Disponível',
-        assignedTo: undefined, // Remover posse para liberar no estoque
-        observations: `Último reparo: ${finalDiagnosis}`,
+        assignedTo: undefined, // Libera o colaborador anterior
+        observations: `Reparo finalizado em ${new Date().toLocaleDateString()}: ${diagnosis}`,
         history: [...(detailAsset.history || []), historyEntry]
       };
 
       await onUpdateAsset(updatedAsset);
+      alert("Manutenção concluída com sucesso! O ativo está disponível para uso.");
       setShowDetailModal(false);
       setDetailAsset(null);
       setFinalDiagnosis('');
-      alert("Ativo liberado com sucesso.");
-    } catch (error) {
-      alert("Erro ao concluir manutenção.");
+    } catch (error: any) {
+      alert("Falha ao concluir: " + (error.message || "Erro de rede"));
     } finally {
       setIsSubmitting(false);
     }
@@ -146,48 +144,53 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
   const handleRetireAsset = async () => {
     if (!detailAsset) return;
     
-    if (!finalDiagnosis.trim()) {
+    const diagnosis = finalDiagnosis.trim();
+    if (!diagnosis) {
       setValidationError(true);
-      alert("ERRO: Justificativa Técnica é obrigatória para realizar a Baixa Patrimonial.");
       return;
     }
     
-    if (!confirm("Confirmar BAIXA PATRIMONIAL permanente? O ativo será inativado e removido do inventário de uso.")) return;
+    if (!window.confirm("CONFIRMAÇÃO CRÍTICA: Deseja realmente realizar a BAIXA PATRIMONIAL permanente deste ativo? Esta ação removerá o ativo de circulação.")) {
+      return;
+    }
 
     setIsSubmitting(true);
+    setValidationError(false);
     try {
       const historyEntry: HistoryEntry = {
-        id: Math.random().toString(),
+        id: `HIST-BAIXA-${Date.now()}`,
         date: new Date().toISOString(),
         type: 'Status',
-        description: `BAIXA PATRIMONIAL EXECUTADA. Motivo do Descarte: ${finalDiagnosis}`,
+        description: `BAIXA PATRIMONIAL DEFINITIVA: ${diagnosis}`,
         performedBy: currentUser.name
       };
 
       const updatedAsset: Asset = {
         ...detailAsset,
         status: 'Baixado',
-        assignedTo: undefined, // CRÍTICO: Limpar posse no banco
-        observations: `ITEM INATIVADO EM ${new Date().toLocaleDateString()}: ${finalDiagnosis}`,
+        assignedTo: undefined, // Crucial: limpar vínculo
+        departmentId: detailAsset.departmentId, // Mantemos depto original p/ histórico
+        observations: `ATIVO INATIVADO/BAIXADO EM ${new Date().toLocaleDateString()}: ${diagnosis}`,
         history: [...(detailAsset.history || []), historyEntry]
       };
 
+      console.log("[Maintenance] Executando baixa para:", updatedAsset.id);
       await onUpdateAsset(updatedAsset);
       
       onAddNotification({
-        title: 'Ativo Inativado',
-        message: `O Ativo ${detailAsset.id} foi baixado permanentemente.`,
+        title: 'Baixa de Patrimônio',
+        message: `O ativo ${detailAsset.id} foi inativado permanentemente.`,
         type: 'alert',
         targetModule: 'assets'
       });
 
+      alert(`Baixa patrimonial do ativo ${detailAsset.id} realizada com sucesso!`);
       setShowDetailModal(false);
       setDetailAsset(null);
       setFinalDiagnosis('');
-      alert("Baixa patrimonial realizada com sucesso.");
     } catch (error: any) {
       console.error("Erro na baixa:", error);
-      alert("Erro ao realizar baixa: " + (error.message || "Verifique sua conexão."));
+      alert("Erro ao processar baixa patrimonial: " + (error.message || "Verifique a conexão ou permissões."));
     } finally {
       setIsSubmitting(false);
     }
@@ -205,15 +208,13 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
         itemFulfillments: [{ type: poType, isPurchaseOrder: true, purchaseStatus: 'Pendente' }]
       });
       setShowPOForm(false);
-      alert("Pedido de compra solicitado com sucesso.");
+      alert("Solicitação de peça enviada para Compras.");
     } catch (e) {
       alert("Erro ao solicitar peça.");
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  const getEmployeeName = (id?: string) => employees.find(e => e.id === id)?.name || 'N/A';
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -239,6 +240,7 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
               if (isSubmitting) return;
               setDetailAsset(asset);
               setFinalDiagnosis(''); 
+              setValidationError(false);
               setShowDetailModal(true);
             }}
             className="bg-white p-6 rounded-[2.5rem] border-2 border-amber-100 shadow-sm hover:shadow-xl hover:border-amber-400 transition-all group flex flex-col cursor-pointer active:scale-95"
@@ -391,14 +393,20 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
                  </div>
 
                  <div className="space-y-3">
-                    <label className={`text-[10px] font-black uppercase tracking-widest ml-1 flex items-center gap-2 transition-colors ${validationError ? 'text-rose-500' : 'text-blue-600'}`}>
-                       <FileText className="w-4 h-4" /> Laudo Técnico / Diagnóstico de Saída (Obrigatório)
-                    </label>
+                    <div className="flex justify-between items-center ml-1">
+                      <label className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-colors ${validationError ? 'text-rose-500' : 'text-blue-600'}`}>
+                         <FileText className="w-4 h-4" /> Laudo Técnico / Justificativa (Obrigatório)
+                      </label>
+                      {validationError && <span className="text-[9px] font-black text-rose-500 uppercase animate-pulse">Preenchimento Necessário</span>}
+                    </div>
                     <textarea 
-                      className={`w-full p-6 rounded-[2.5rem] bg-white border-2 outline-none font-bold text-slate-800 min-h-[160px] resize-none transition-all ${validationError ? 'border-rose-300 animate-pulse' : 'border-slate-200 focus:border-blue-500'}`}
-                      placeholder="Relate os procedimentos realizados ou o motivo técnico para a baixa..."
+                      className={`w-full p-6 rounded-[2.5rem] bg-white border-2 outline-none font-bold text-slate-800 min-h-[160px] resize-none transition-all ${validationError ? 'border-rose-300 ring-2 ring-rose-100 shadow-lg shadow-rose-100' : 'border-slate-200 focus:border-blue-500'}`}
+                      placeholder="Relate os procedimentos realizados ou o motivo técnico para a baixa patrimonial..."
                       value={finalDiagnosis}
-                      onChange={(e) => setFinalDiagnosis(e.target.value)}
+                      onChange={(e) => {
+                        setFinalDiagnosis(e.target.value);
+                        if (e.target.value.trim()) setValidationError(false);
+                      }}
                     />
                  </div>
 
@@ -415,15 +423,12 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
 
                     <button 
                       type="button"
-                      onClick={(e) => {
-                         e.preventDefault();
-                         handleRetireAsset();
-                      }}
+                      onClick={handleRetireAsset}
                       disabled={isSubmitting}
-                      className="w-full p-5 rounded-2xl border-2 border-slate-100 hover:border-rose-600 hover:bg-rose-50/30 transition-all flex flex-col items-center justify-center gap-2 disabled:opacity-50"
+                      className={`w-full p-5 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 disabled:opacity-50 ${validationError ? 'border-rose-400 bg-rose-50 animate-bounce' : 'border-slate-100 hover:border-rose-600 hover:bg-rose-50/30'}`}
                     >
-                       <Trash2 className="w-5 h-5 text-rose-500" />
-                       <span className="text-[11px] font-black uppercase tracking-widest text-rose-700">Baixa / Inativar</span>
+                       <Trash2 className={`w-5 h-5 ${validationError ? 'text-rose-600' : 'text-rose-500'}`} />
+                       <span className={`text-[11px] font-black uppercase tracking-widest ${validationError ? 'text-rose-800' : 'text-rose-700'}`}>Baixa / Inativar</span>
                     </button>
                  </div>
 
