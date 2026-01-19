@@ -1,31 +1,45 @@
 
 import React, { useState } from 'react';
-import { Package, LogIn, Lock, User as UserIcon } from 'lucide-react';
+import { Package, LogIn, Lock, User as UserIcon, Loader2 } from 'lucide-react';
 import { UserAccount } from '../types';
+import { db } from '../services/supabase';
 
 interface AuthProps {
   onLogin: (user: UserAccount) => void;
-  users: UserAccount[];
+  users: UserAccount[]; // Mantido por compatibilidade de interface, mas ignorado no login direto
 }
 
-const Auth: React.FC<AuthProps> = ({ onLogin, users }) => {
+const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const inputUser = username.toLowerCase();
-    const foundUser = users.find(u => 
-      u.username.toLowerCase() === inputUser && 
-      (u.password === password || (password === 'admin' && !u.password))
-    );
+    setIsAuthenticating(true);
 
-    if (foundUser) {
-      onLogin(foundUser);
-    } else {
-      setError('Credenciais inválidas. Verifique usuário e senha.');
+    try {
+      // SEGURANÇA: Busca direta no Supabase para evitar vazamento da tabela inteira
+      const foundUser = await db.users.getForAuth(username.toLowerCase());
+
+      if (foundUser) {
+        // Validação de senha (em produção, use hashes com Supabase Auth)
+        const isValid = foundUser.password === password || (!foundUser.password && password === 'admin');
+        
+        if (isValid) {
+          onLogin(foundUser);
+        } else {
+          setError('Senha incorreta.');
+        }
+      } else {
+        setError('Usuário não encontrado.');
+      }
+    } catch (err) {
+      setError('Erro ao conectar com o serviço de autenticação.');
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
@@ -49,6 +63,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, users }) => {
               <input 
                 type="text" 
                 required 
+                disabled={isAuthenticating}
                 className="w-full p-4 rounded-2xl border border-slate-200 outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-600 placeholder:text-slate-500 transition-all bg-slate-50/50" 
                 placeholder="Ex: admin" 
                 value={username} 
@@ -62,6 +77,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, users }) => {
               <input 
                 type="password" 
                 required 
+                disabled={isAuthenticating}
                 className="w-full p-4 rounded-2xl border border-slate-200 outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-600 placeholder:text-slate-500 transition-all bg-slate-50/50" 
                 placeholder="Ex: admin" 
                 value={password} 
@@ -77,16 +93,26 @@ const Auth: React.FC<AuthProps> = ({ onLogin, users }) => {
 
             <button 
               type="submit" 
-              className="w-full bg-slate-900 hover:bg-black text-white font-black py-5 rounded-[2rem] shadow-xl transition-all active:scale-95 uppercase tracking-widest text-xs flex items-center justify-center gap-3"
+              disabled={isAuthenticating}
+              className="w-full bg-slate-900 hover:bg-black text-white font-black py-5 rounded-[2rem] shadow-xl transition-all active:scale-95 uppercase tracking-widest text-xs flex items-center justify-center gap-3 disabled:bg-slate-400"
             >
-              <LogIn className="w-5 h-5" />
-              Acessar Sistema
+              {isAuthenticating ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Verificando...
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-5 h-5" />
+                  Acessar Sistema
+                </>
+              )}
             </button>
           </form>
 
           <div className="mt-10 text-center">
             <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-              Modo Operacional: Local (Sessão Privada)
+              Sincronizado via RLS (Supabase)
             </p>
           </div>
         </div>

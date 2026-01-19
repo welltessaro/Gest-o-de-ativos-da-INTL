@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Plus, 
   Search, 
@@ -22,18 +22,23 @@ import {
   ShieldCheck,
   FileSpreadsheet,
   PlusCircle,
-  Save
+  Save,
+  MessageSquarePlus,
+  AlertCircle,
+  Loader2,
+  Building2,
+  Package
 } from 'lucide-react';
-import { Asset, AssetType, Employee, Department, HistoryEntry } from '../types';
+import { Asset, AssetType, Employee, Department, HistoryEntry, AssetStatus } from '../types';
 import { ASSET_TYPES } from '../constants';
 
 interface AssetManagerProps {
   assets: Asset[];
   employees: Employee[];
   companies: Department[];
-  onAdd: (asset: Omit<Asset, 'id' | 'createdAt' | 'qrCode' | 'history'> & { id?: string }) => void;
-  onUpdate: (asset: Asset) => void;
-  onRemove: (id: string) => void;
+  onAdd: (asset: Omit<Asset, 'id' | 'createdAt' | 'qrCode' | 'history'> & { id?: string }) => Promise<void>;
+  onUpdate: (asset: Asset) => Promise<void>;
+  onRemove: (id: string) => Promise<void>;
 }
 
 interface BulkAssetEntry {
@@ -61,16 +66,15 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
   const [detailAsset, setDetailAsset] = useState<Asset | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
-  
-  const [bulkEntries, setBulkEntries] = useState<BulkAssetEntry[]>([
-    { tempId: '1', departmentId: companies[0]?.id || '', type: 'Notebook', brand: '', model: '', ram: '', storage: '', screenSize: '', caseModel: '', isWireless: false, monitorInputs: [], isAbnt: true, hasNumericKeypad: true, id: '', assignedTo: '', observations: '' }
-  ]);
+  const [isSavingBulk, setIsSavingBulk] = useState(false);
+  const [manualLog, setManualLog] = useState('');
 
+  const [bulkEntries, setBulkEntries] = useState<BulkAssetEntry[]>([]);
   const [newAsset, setNewAsset] = useState<Partial<Asset>>({
     type: 'Notebook',
-    status: 'Pendente Documentos',
+    status: 'Disponível',
     photos: [],
-    departmentId: companies[0]?.id || '',
+    departmentId: '',
     ram: '',
     storage: '',
     screenSize: '',
@@ -81,14 +85,70 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
     hasNumericKeypad: true
   });
 
-  const getDepartmentName = (id: string) => companies.find(c => c.id === id)?.name || 'N/A';
-  const getEmployeeName = (id?: string) => employees.find(e => e.id === id)?.name || 'Disponível em Estoque';
+  // Garante que o ID do departamento esteja correto ao abrir o modal
+  useEffect(() => {
+    if (companies.length > 0 && !newAsset.departmentId) {
+      setNewAsset(prev => ({ ...prev, departmentId: companies[0].id }));
+      setBulkEntries([{ 
+        tempId: '1', departmentId: companies[0].id, type: 'Notebook', brand: '', model: '', ram: '', storage: '', screenSize: '', caseModel: '', isWireless: false, monitorInputs: [], isAbnt: true, hasNumericKeypad: true, id: '', assignedTo: '', observations: '' 
+      }]);
+    }
+  }, [companies, showForm, showBulkModal]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const getDepartmentName = (id: string) => companies.find(c => c.id === id)?.name || 'N/A';
+  const getEmployeeName = (id?: string) => employees.find(e => e.id === id)?.name || 'Em Estoque';
+
+  const handleAddManualLog = async () => {
+    if (!detailAsset || !manualLog.trim()) return;
+
+    const newEntry: HistoryEntry = {
+      id: Math.random().toString(),
+      date: new Date().toISOString(),
+      type: 'Observação',
+      description: manualLog,
+      performedBy: 'Gestor de TI'
+    };
+
+    const updatedAsset: Asset = {
+      ...detailAsset,
+      history: [...(detailAsset.history || []), newEntry]
+    };
+
+    await onUpdate(updatedAsset);
+    setDetailAsset(updatedAsset);
+    setManualLog('');
+  };
+
+  const handleStatusChangeManual = async (newStatus: AssetStatus) => {
+    if (!detailAsset) return;
+
+    const newEntry: HistoryEntry = {
+      id: Math.random().toString(),
+      date: new Date().toISOString(),
+      type: 'Status',
+      description: `Status alterado manualmente de ${detailAsset.status} para ${newStatus}.`,
+      performedBy: 'Gestor de TI'
+    };
+
+    const updatedAsset: Asset = {
+      ...detailAsset,
+      status: newStatus,
+      history: [...(detailAsset.history || []), newEntry]
+    };
+
+    await onUpdate(updatedAsset);
+    setDetailAsset(updatedAsset);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onAdd(newAsset as any);
+    if (!newAsset.departmentId) {
+      alert("Selecione ou crie um departamento primeiro.");
+      return;
+    }
+    await onAdd(newAsset as any);
     setShowForm(false);
-    setNewAsset({ type: 'Notebook', status: 'Pendente Documentos', photos: [], departmentId: companies[0]?.id || '', ram: '', storage: '', screenSize: '', caseModel: '', isWireless: false, monitorInputs: [], isAbnt: true, hasNumericKeypad: true });
+    setNewAsset({ type: 'Notebook', status: 'Disponível', photos: [], departmentId: companies[0]?.id || '', ram: '', storage: '', screenSize: '', caseModel: '', isWireless: false, monitorInputs: [], isAbnt: true, hasNumericKeypad: true });
   };
 
   const handleBulkAddRow = () => {
@@ -112,29 +172,43 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
     }]);
   };
 
-  const handleBulkSave = () => {
-    bulkEntries.forEach(entry => {
-      onAdd({
-        id: entry.id,
-        departmentId: entry.departmentId,
-        type: entry.type,
-        brand: entry.brand,
-        model: entry.model,
-        ram: entry.ram,
-        storage: entry.storage,
-        screenSize: entry.screenSize,
-        caseModel: entry.caseModel,
-        isWireless: entry.isWireless,
-        monitorInputs: entry.monitorInputs,
-        isAbnt: entry.isAbnt,
-        hasNumericKeypad: entry.hasNumericKeypad,
-        observations: entry.observations,
-        photos: [],
-        status: entry.assignedTo ? 'Em Uso' : 'Disponível',
-        assignedTo: entry.assignedTo || undefined,
-      });
-    });
-    setShowBulkModal(false);
+  const handleBulkSave = async () => {
+    if (companies.length === 0) {
+      alert("Erro: Você precisa cadastrar pelo menos um Departamento antes.");
+      return;
+    }
+
+    setIsSavingBulk(true);
+    try {
+      for (const entry of bulkEntries) {
+        if (!entry.id) continue;
+        await onAdd({
+          id: entry.id,
+          departmentId: entry.departmentId || companies[0].id,
+          type: entry.type,
+          brand: entry.brand,
+          model: entry.model,
+          ram: entry.ram,
+          storage: entry.storage,
+          screenSize: entry.screenSize,
+          caseModel: entry.caseModel,
+          isWireless: entry.isWireless,
+          monitorInputs: entry.monitorInputs,
+          isAbnt: entry.isAbnt,
+          hasNumericKeypad: entry.hasNumericKeypad,
+          observations: entry.observations,
+          photos: [],
+          status: entry.assignedTo ? 'Em Uso' : 'Disponível',
+          assignedTo: entry.assignedTo || undefined,
+        });
+      }
+      setShowBulkModal(false);
+      setBulkEntries([{ tempId: '1', departmentId: companies[0]?.id || '', type: 'Notebook', brand: '', model: '', ram: '', storage: '', screenSize: '', caseModel: '', isWireless: false, monitorInputs: [], isAbnt: true, hasNumericKeypad: true, id: '', assignedTo: '', observations: '' }]);
+    } catch (err) {
+      alert("Erro ao salvar ativos em lote.");
+    } finally {
+      setIsSavingBulk(false);
+    }
   };
 
   const filteredAssets = assets.filter(a => {
@@ -144,6 +218,10 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
     const matchesType = filterType === 'all' || a.type === filterType;
     return matchesSearch && matchesType;
   });
+
+  const toggleMonitorInput = (current: string[], val: string) => {
+    return current.includes(val) ? current.filter(v => v !== val) : [...current, val];
+  };
 
   return (
     <div className="space-y-6 relative">
@@ -200,14 +278,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black text-slate-800">{asset.type}</span>
-                      {asset.type === 'Monitor' && (
-                        <div className="flex gap-2 text-[8px] font-bold text-slate-500 uppercase mt-1">
-                          <span className="text-blue-600">{asset.screenSize}</span>
-                        </div>
-                      )}
-                    </div>
+                    <span className="text-xs font-black text-slate-800">{asset.type}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="font-bold text-slate-900">{asset.brand}</span>
@@ -216,24 +287,34 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase border ${
                       asset.status === 'Disponível' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                      asset.status === 'Em Uso' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-700 border-slate-200'
+                      asset.status === 'Em Uso' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                      asset.status === 'Manutenção' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-700 border-slate-200'
                     }`}>
                       {asset.status}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <button onClick={(e) => {e.stopPropagation(); onRemove(asset.id)}} className="p-2 text-slate-500 hover:text-rose-600 transition-colors">
+                    <button onClick={async (e) => {e.stopPropagation(); if(confirm("Remover este ativo?")) await onRemove(asset.id)}} className="p-2 text-slate-400 hover:text-rose-600 transition-colors">
                       <Trash2 className="w-5 h-5" />
                     </button>
                   </td>
                 </tr>
               ))}
+              {filteredAssets.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-20 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-3 opacity-30">
+                       <Package className="w-12 h-12" />
+                       <p className="font-black uppercase tracking-widest text-xs">Nenhum ativo registrado.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Modal de Detalhes e Histórico */}
       {detailAsset && (
         <div className="fixed inset-0 z-[150] flex items-center justify-end p-0 md:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
            <div className="bg-white w-full max-w-2xl h-full md:h-auto md:max-h-[90vh] md:rounded-[3rem] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 overflow-hidden">
@@ -244,16 +325,32 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                     </div>
                     <div>
                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">{detailAsset.id}</h3>
-                       <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Visão Geral do Patrimônio</p>
+                       <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Rastreabilidade Total</p>
                     </div>
                  </div>
-                 <button onClick={() => setDetailAsset(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                 <button onClick={() => {setDetailAsset(null); setManualLog('');}} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
                     <X className="w-6 h-6 text-slate-400" />
                  </button>
               </div>
 
               <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
-                 {/* Seção Técnica */}
+                 <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 text-center">Gestão de Status</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                       {(['Disponível', 'Em Uso', 'Manutenção', 'Baixado'] as AssetStatus[]).map(s => (
+                          <button 
+                            key={s}
+                            onClick={() => handleStatusChangeManual(s)}
+                            className={`py-2 text-[9px] font-black uppercase rounded-xl border transition-all ${
+                               detailAsset.status === s ? 'bg-blue-600 text-white border-blue-700 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-300'
+                            }`}
+                          >
+                             {s}
+                          </button>
+                       ))}
+                    </div>
+                 </div>
+
                  <div className="grid grid-cols-2 gap-4">
                     <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
                        <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Responsável Atual</p>
@@ -271,18 +368,35 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                     </div>
                  </div>
 
-                 {/* Histórico / Timeline */}
                  <div className="space-y-6">
-                    <div className="flex items-center gap-2">
-                       <History className="w-5 h-5 text-blue-600" />
-                       <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Histórico de Vida do Ativo</h4>
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-2">
+                          <History className="w-5 h-5 text-blue-600" />
+                          <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Linha do Tempo</h4>
+                       </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4">
+                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Adicionar Log Manual</p>
+                       <div className="flex gap-2">
+                          <input 
+                            type="text"
+                            placeholder="Descreva um evento..."
+                            className="flex-1 p-3 rounded-xl border border-slate-200 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-600"
+                            value={manualLog}
+                            onChange={(e) => setManualLog(e.target.value)}
+                          />
+                          <button onClick={handleAddManualLog} className="bg-slate-900 text-white p-3 rounded-xl hover:bg-black transition-colors shadow-lg">
+                            <MessageSquarePlus className="w-5 h-5" />
+                          </button>
+                       </div>
                     </div>
 
                     <div className="relative pl-8 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
                        {detailAsset.history?.length > 0 ? (
-                         detailAsset.history.slice().reverse().map((entry) => (
+                         [...detailAsset.history].reverse().map((entry) => (
                            <div key={entry.id} className="relative group">
-                              <div className={`absolute -left-[30px] top-1 w-6 h-6 rounded-full border-4 border-white shadow-sm flex items-center justify-center transition-all ${
+                              <div className={`absolute -left-[30px] top-1 w-6 h-6 rounded-full border-4 border-white shadow-sm flex items-center justify-center ${
                                 entry.type === 'Manutenção' ? 'bg-amber-500' :
                                 entry.type === 'Atribuição' ? 'bg-blue-600' :
                                 entry.type === 'Criação' ? 'bg-emerald-500' : 'bg-slate-400'
@@ -290,70 +404,114 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                                 {entry.type === 'Manutenção' && <Wrench className="w-3 h-3 text-white" />}
                                 {entry.type === 'Atribuição' && <User className="w-3 h-3 text-white" />}
                                 {entry.type === 'Criação' && <CheckCircle2 className="w-3 h-3 text-white" />}
-                                {entry.type === 'Status' && <Clock className="w-3 h-3 text-white" />}
                               </div>
-                              
                               <div className="space-y-1">
                                  <div className="flex items-center justify-between">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                       {new Date(entry.date).toLocaleDateString('pt-BR')} {new Date(entry.date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
-                                    </p>
-                                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
-                                       entry.type === 'Manutenção' ? 'bg-amber-100 text-amber-700' :
-                                       entry.type === 'Atribuição' ? 'bg-blue-100 text-blue-700' :
-                                       entry.type === 'Criação' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'
-                                    }`}>
-                                       {entry.type}
-                                    </span>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{new Date(entry.date).toLocaleDateString('pt-BR')}</p>
+                                    <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">{entry.type}</span>
                                  </div>
                                  <p className="text-sm text-slate-800 font-bold leading-relaxed">{entry.description}</p>
-                                 {entry.userContext && (
-                                    <div className="flex items-center gap-1.5 mt-1 text-[10px] font-bold text-slate-500 bg-slate-50 w-fit px-2 py-1 rounded-lg">
-                                       <User className="w-2.5 h-2.5" /> Contexto: {entry.userContext}
-                                    </div>
-                                 )}
                               </div>
                            </div>
                          ))
-                       ) : (
-                         <div className="text-center py-10 opacity-30">
-                            <Clock className="w-10 h-10 mx-auto mb-2" />
-                            <p className="text-xs font-bold uppercase tracking-widest">Nenhum histórico registrado</p>
-                         </div>
-                       )}
+                       ) : <p className="text-center py-10 text-slate-400 font-bold uppercase tracking-widest text-xs opacity-50">Nenhum histórico</p>}
                     </div>
                  </div>
               </div>
               
               <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end">
-                 <button onClick={() => setDetailAsset(null)} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-slate-200">Fechar Detalhes</button>
+                 <button onClick={() => setDetailAsset(null)} className="px-10 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl transition-all">Fechar</button>
               </div>
            </div>
         </div>
       )}
 
-      {/* Modais de Cadastro (Formulários existentes preservados) */}
       {showBulkModal && (
         <div className="fixed inset-0 z-[200] flex flex-col bg-slate-900/95 backdrop-blur-xl animate-in fade-in duration-300 print:hidden">
-          {/* Lógica do Modal Bulk mantida conforme versões anteriores */}
           <div className="h-20 bg-slate-800/50 border-b border-white/10 flex items-center justify-between px-8 text-white">
              <div className="flex items-center gap-4">
                <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
                   <FileSpreadsheet className="w-6 h-6" />
                </div>
                <div>
-                  <h3 className="font-black tracking-tight">Lançamento em Lote</h3>
-                  <p className="text-[10px] text-slate-200 font-black uppercase tracking-widest">Coleta de Campo</p>
+                  <h3 className="font-black tracking-tight">Levantamento de Campo em Lote</h3>
+                  <p className="text-[10px] text-slate-200 font-black uppercase tracking-widest">Coleta Física de Inventário</p>
                </div>
             </div>
-            <button onClick={() => setShowBulkModal(false)} className="p-2 hover:bg-white/10 rounded-full"><X className="w-6 h-6" /></button>
+            <button onClick={() => setShowBulkModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+               <X className="w-6 h-6" />
+            </button>
           </div>
+
           <div className="flex-1 overflow-auto p-8">
-             {/* Tabela de cadastro bulk aqui */}
-             <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 flex flex-col items-center justify-center min-h-[400px]">
-                <p className="text-slate-400 font-bold uppercase tracking-widest mb-4">Interface de Cadastro em Lote</p>
-                <button onClick={handleBulkSave} className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black shadow-xl">Processar Lote Atual</button>
-             </div>
+             {companies.length === 0 ? (
+               <div className="bg-white rounded-[2.5rem] p-20 text-center flex flex-col items-center justify-center space-y-6">
+                  <Building2 className="w-20 h-20 text-slate-200" />
+                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Banco Sem Departamentos</h3>
+                  <p className="text-slate-500 max-w-sm text-sm">Cadastre os Departamentos antes de lançar o levantamento.</p>
+                  <button onClick={() => setShowBulkModal(false)} className="px-8 py-3 bg-slate-900 text-white rounded-xl font-bold uppercase text-[10px] tracking-widest">Voltar</button>
+               </div>
+             ) : (
+              <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-200">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[1000px]">
+                        <thead className="bg-slate-50 border-b border-slate-200">
+                          <tr>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-800 uppercase w-48 tracking-widest">Depto / Tipo</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-800 uppercase tracking-widest">Marca / Modelo</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-800 uppercase tracking-widest">Patrimônio</th>
+                            <th className="px-6 py-4 text-[10px] font-black text-slate-800 uppercase tracking-widest">Responsável</th>
+                            <th className="px-6 py-4"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {bulkEntries.map((entry, idx) => (
+                            <tr key={entry.tempId} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="px-6 py-4 space-y-2">
+                                  <select className="w-full p-2 bg-slate-100 rounded-xl text-xs font-bold border-none appearance-none" value={entry.departmentId} onChange={e => {const n=[...bulkEntries]; n[idx].departmentId=e.target.value; setBulkEntries(n)}}>
+                                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                  </select>
+                                  <select className="w-full p-2 bg-white rounded-xl text-xs font-bold border border-slate-300 appearance-none" value={entry.type} onChange={e => {const n=[...bulkEntries]; n[idx].type=e.target.value as AssetType; setBulkEntries(n)}}>
+                                    {ASSET_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                  </select>
+                                </td>
+                                <td className="px-6 py-4 space-y-2">
+                                  <input className="w-full p-2 bg-white border border-slate-300 rounded-xl text-xs font-bold" placeholder="Marca" value={entry.brand} onChange={e => {const n=[...bulkEntries]; n[idx].brand=e.target.value; setBulkEntries(n)}} />
+                                  <input className="w-full p-2 bg-white border border-slate-300 rounded-xl text-xs font-bold" placeholder="Modelo" value={entry.model} onChange={e => {const n=[...bulkEntries]; n[idx].model=e.target.value; setBulkEntries(n)}} />
+                                </td>
+                                <td className="px-6 py-4">
+                                  <input className="w-full p-2 bg-slate-100 border border-slate-300 rounded-xl text-xs font-mono font-black uppercase text-center" placeholder="ID PATRIMONIAL" value={entry.id} onChange={e => {const n=[...bulkEntries]; n[idx].id=e.target.value; setBulkEntries(n)}} />
+                                </td>
+                                <td className="px-6 py-4">
+                                  <select className="w-full p-2 bg-white border border-slate-300 rounded-xl text-xs font-bold appearance-none" value={entry.assignedTo} onChange={e => {const n=[...bulkEntries]; n[idx].assignedTo=e.target.value; setBulkEntries(n)}}>
+                                    <option value="">ESTOQUE</option>
+                                    {employees.filter(emp => emp.departmentId === entry.departmentId).map(emp => (
+                                      <option key={emp.id} value={emp.id}>{emp.name}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <button onClick={() => setBulkEntries(bulkEntries.filter(b => b.tempId !== entry.tempId))} className="text-slate-400 hover:text-rose-500 transition-colors p-2"><Trash2 className="w-4 h-4" /></button>
+                                </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                    </table>
+                  </div>
+                  <div className="p-8 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                    <button onClick={handleBulkAddRow} disabled={isSavingBulk} className="text-blue-600 font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:underline disabled:opacity-30">
+                        <PlusCircle className="w-5 h-5" /> Item
+                    </button>
+                    <div className="flex gap-4">
+                        <button onClick={() => setShowBulkModal(false)} className="px-8 py-3 font-black text-slate-500 uppercase text-xs tracking-widest">Descartar</button>
+                        <button onClick={handleBulkSave} disabled={isSavingBulk} className="bg-emerald-600 hover:bg-emerald-700 text-white px-10 py-3 rounded-2xl font-black shadow-xl shadow-emerald-100 flex items-center gap-2 uppercase tracking-widest text-xs transition-all disabled:bg-slate-400">
+                          {isSavingBulk ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          Salvar Levantamento
+                        </button>
+                    </div>
+                  </div>
+              </div>
+             )}
           </div>
         </div>
       )}
@@ -369,18 +527,25 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                 <div className="grid grid-cols-2 gap-4">
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Tipo</label>
-                      <select className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold" value={newAsset.type} onChange={e => setNewAsset({...newAsset, type: e.target.value as any})}>
+                      <select className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold appearance-none" value={newAsset.type} onChange={e => setNewAsset({...newAsset, type: e.target.value as any})}>
                          {ASSET_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                    </div>
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Marca</label>
-                      <input className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold" value={newAsset.brand} onChange={e => setNewAsset({...newAsset, brand: e.target.value})} placeholder="Ex: Dell" required />
+                      <input className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold" value={newAsset.brand} onChange={e => setNewAsset({...newAsset, brand: e.target.value})} placeholder="Dell" required />
                    </div>
                 </div>
                 <div className="space-y-1">
                    <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Modelo</label>
-                   <input className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold" value={newAsset.model} onChange={e => setNewAsset({...newAsset, model: e.target.value})} placeholder="Ex: Latitude 5420" required />
+                   <input className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold" value={newAsset.model} onChange={e => setNewAsset({...newAsset, model: e.target.value})} placeholder="Latitude 5420" required />
+                </div>
+                <div className="space-y-1">
+                   <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Departamento</label>
+                   <select className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold appearance-none" value={newAsset.departmentId} onChange={e => setNewAsset({...newAsset, departmentId: e.target.value})} required>
+                     {companies.length === 0 && <option value="">Nenhum Depto Encontrado</option>}
+                     {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                   </select>
                 </div>
                 <div className="flex gap-4 pt-4">
                    <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-4 font-black text-slate-400 uppercase tracking-widest text-xs">Cancelar</button>
@@ -390,19 +555,6 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
           </div>
         </div>
       )}
-
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 5px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #e2e8f0;
-          border-radius: 10px;
-        }
-      `}</style>
     </div>
   );
 };
