@@ -11,16 +11,25 @@ export type AssetType =
 
 export type AssetStatus = 'Disponível' | 'Em Uso' | 'Manutenção' | 'Baixado' | 'Pendente Documentos';
 
-export interface Company {
+export interface HistoryEntry {
+  id: string;
+  date: string;
+  type: 'Manutenção' | 'Atribuição' | 'Status' | 'Criação' | 'Observação';
+  description: string;
+  performedBy?: string;
+  userContext?: string; // Nome do colaborador envolvido, se houver
+}
+
+export interface Department {
   id: string;
   name: string;
-  cnpj?: string;
+  costCenter?: string;
   createdAt: string;
 }
 
 export interface Asset {
   id: string;
-  companyId: string; // Vínculo com a empresa
+  departmentId: string; // Vínculo com o departamento
   type: AssetType;
   brand: string;
   model: string;
@@ -28,17 +37,23 @@ export interface Asset {
   storage?: string;
   processor?: string;
   screenSize?: string;
+  caseModel?: string; 
+  isWireless?: boolean; 
+  monitorInputs?: string[]; 
+  isAbnt?: boolean; 
+  hasNumericKeypad?: boolean; 
   observations: string;
   photos: string[];
   status: AssetStatus;
   assignedTo?: string; // Employee ID
   qrCode: string;
   createdAt: string;
+  history: HistoryEntry[]; // Novo campo para rastreio
 }
 
 export interface Employee {
   id: string;
-  companyId: string; // Vínculo com a empresa
+  departmentId: string; // Vínculo com o departamento
   name: string;
   sector: string;
   role: string;
@@ -47,7 +62,7 @@ export interface Employee {
 
 export type AppModule = 
   | 'dashboard' 
-  | 'companies'
+  | 'departments'
   | 'assets' 
   | 'employees' 
   | 'requests' 

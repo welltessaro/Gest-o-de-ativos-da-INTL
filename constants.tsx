@@ -1,21 +1,21 @@
 
-import { Asset, Employee, UserAccount, AppModule, Company } from './types';
+import { Asset, Employee, UserAccount, AppModule, Department } from './types';
 
-export const MOCK_COMPANIES: Company[] = [
-  { id: 'COMP-1', name: 'Matriz São Paulo', cnpj: '12.345.678/0001-90', createdAt: '01/01/2023' },
-  { id: 'COMP-2', name: 'Filial Curitiba', cnpj: '12.345.678/0002-88', createdAt: '15/03/2023' },
-  { id: 'COMP-3', name: 'Tech Inova Serviços', cnpj: '99.888.777/0001-11', createdAt: '10/10/2023' },
+export const MOCK_DEPARTMENTS: Department[] = [
+  { id: 'DEPT-1', name: 'Tecnologia da Informação', costCenter: '1001-TI', createdAt: '01/01/2023' },
+  { id: 'DEPT-2', name: 'Recursos Humanos', costCenter: '2002-RH', createdAt: '15/03/2023' },
+  { id: 'DEPT-3', name: 'Comercial e Vendas', costCenter: '3003-COM', createdAt: '10/10/2023' },
 ];
 
 export const MOCK_EMPLOYEES: Employee[] = [
-  { id: '1', companyId: 'COMP-1', name: 'João Silva', sector: 'Vendas', role: 'Vendedor Senior', cpf: '123.456.789-00' },
-  { id: '2', companyId: 'COMP-1', name: 'Maria Santos', sector: 'TI', role: 'Desenvolvedora', cpf: '987.654.321-11' },
-  { id: '3', companyId: 'COMP-2', name: 'Carlos Lima', sector: 'RH', role: 'Analista de RH', cpf: '456.123.789-22' },
+  { id: '1', departmentId: 'DEPT-3', name: 'João Silva', sector: 'Vendas', role: 'Vendedor Senior', cpf: '123.456.789-00' },
+  { id: '2', departmentId: 'DEPT-1', name: 'Maria Santos', sector: 'TI', role: 'Desenvolvedora', cpf: '987.654.321-11' },
+  { id: '3', departmentId: 'DEPT-2', name: 'Carlos Lima', sector: 'RH', role: 'Analista de RH', cpf: '456.123.789-22' },
 ];
 
 export const ALL_MODULES: { id: AppModule; label: string }[] = [
   { id: 'dashboard', label: 'Diretoria - Dashboard' },
-  { id: 'companies', label: 'Empresas Clientes' },
+  { id: 'departments', label: 'Gestão de Departamentos' },
   { id: 'assets', label: 'Inventário de Ativos' },
   { id: 'maintenance', label: 'Centro de Manutenção' },
   { id: 'employees', label: 'Colaboradores (RH)' },
@@ -32,7 +32,7 @@ export const MOCK_USERS: UserAccount[] = [
     name: 'Administrador Master', 
     username: 'admin', 
     sector: 'TI',
-    modules: ['dashboard', 'companies', 'assets', 'maintenance', 'employees', 'requests', 'purchase-orders', 'printing', 'user-management', 'inventory-check'] 
+    modules: ['dashboard', 'departments', 'assets', 'maintenance', 'employees', 'requests', 'purchase-orders', 'printing', 'user-management', 'inventory-check'] 
   },
   { 
     id: '2', 
@@ -46,7 +46,7 @@ export const MOCK_USERS: UserAccount[] = [
 export const MOCK_ASSETS: Asset[] = [
   {
     id: 'AST-001',
-    companyId: 'COMP-1',
+    departmentId: 'DEPT-1',
     type: 'Notebook',
     brand: 'Dell',
     model: 'Latitude 5420',
@@ -59,11 +59,13 @@ export const MOCK_ASSETS: Asset[] = [
     status: 'Em Uso',
     assignedTo: '1',
     qrCode: 'AST-001-QR',
-    createdAt: '2023-10-01'
+    createdAt: '2023-10-01',
+    // Fix: Adding missing history property required by Asset interface
+    history: []
   },
   {
     id: 'AST-002',
-    companyId: 'COMP-2',
+    departmentId: 'DEPT-2',
     type: 'Monitor',
     brand: 'LG',
     model: 'UltraWide 29"',
@@ -71,7 +73,9 @@ export const MOCK_ASSETS: Asset[] = [
     photos: ['https://picsum.photos/400/300?random=2'],
     status: 'Disponível',
     qrCode: 'AST-002-QR',
-    createdAt: '2023-11-15'
+    createdAt: '2023-11-15',
+    // Fix: Adding missing history property required by Asset interface
+    history: []
   }
 ];
 

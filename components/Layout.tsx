@@ -15,7 +15,8 @@ import {
   Bell,
   Calendar,
   Building2,
-  Wrench
+  Wrench,
+  Layers
 } from 'lucide-react';
 import { AppModule, UserAccount, EquipmentRequest } from '../types';
 
@@ -52,7 +53,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
 
   const menuItems: { id: AppModule; label: string; icon: any }[] = [
     { id: 'dashboard', label: 'Diretoria - Dashboard', icon: LayoutDashboard },
-    { id: 'companies', label: 'Empresas Clientes', icon: Building2 },
+    { id: 'departments', label: 'Gestão de Departamentos', icon: Layers },
     { id: 'assets', label: 'Inventário de Ativos', icon: Package },
     { id: 'maintenance', label: 'Centro de Manutenção', icon: Wrench },
     { id: 'employees', label: 'Colaboradores (RH)', icon: Users },
@@ -88,7 +89,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
               className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl transition-colors ${
                 activeTab === item.id 
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' 
-                  : 'text-slate-200 hover:bg-slate-800 hover:text-white'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`}
             >
               <item.icon className="w-5 h-5" />
@@ -100,7 +101,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, curr
         <div className="absolute bottom-4 left-0 w-full px-4 border-t border-slate-800 pt-4 bg-slate-900">
           <button 
             onClick={onLogout}
-            className="flex items-center gap-3 w-full px-4 py-3 text-slate-200 hover:text-rose-400 transition-colors font-medium"
+            className="flex items-center gap-3 w-full px-4 py-3 text-slate-300 hover:text-rose-400 transition-colors font-medium"
           >
             <LogOut className="w-5 h-5" />
             <span>Sair do Sistema</span>
