@@ -64,8 +64,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 type="text" 
                 required 
                 disabled={isAuthenticating}
-                className="w-full p-4 rounded-2xl border border-slate-200 outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-600 placeholder:text-slate-500 transition-all bg-slate-50/50" 
-                placeholder="Ex: admin" 
+                className="w-full p-4 rounded-2xl border border-slate-200 outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-600 placeholder:text-slate-400 transition-all bg-slate-50/50" 
+                placeholder="Digite seu usuário" 
                 value={username} 
                 onChange={(e) => setUsername(e.target.value)} 
               />
@@ -78,8 +78,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                 type="password" 
                 required 
                 disabled={isAuthenticating}
-                className="w-full p-4 rounded-2xl border border-slate-200 outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-600 placeholder:text-slate-500 transition-all bg-slate-50/50" 
-                placeholder="Ex: admin" 
+                className="w-full p-4 rounded-2xl border border-slate-200 outline-none font-bold text-slate-900 focus:ring-2 focus:ring-blue-600 placeholder:text-slate-400 transition-all bg-slate-50/50" 
+                placeholder="Digite sua senha" 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
               />
@@ -110,9 +110,9 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
             </button>
           </form>
 
-          <div className="mt-10 text-center">
+          <div className="mt-10 text-center border-t border-slate-50 pt-6">
             <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
-              Sincronizado via RLS (Supabase)
+              Acesso Restrito • Monitoramento Ativo
             </p>
           </div>
         </div>
