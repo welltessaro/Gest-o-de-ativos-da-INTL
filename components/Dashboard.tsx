@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell 
@@ -9,7 +9,6 @@ import {
   Activity, 
   AlertTriangle, 
   Layers,
-  Sparkles,
   Truck,
   ArrowRight,
   Package,
@@ -19,8 +18,7 @@ import {
   ChevronRight,
   Info
 } from 'lucide-react';
-import { Asset, EquipmentRequest, Employee, AssetStatus } from '../types';
-import { generateAssetReportSummary } from '../services/geminiService';
+import { Asset, EquipmentRequest, Employee } from '../types';
 
 interface DashboardProps {
   assets: Asset[];
@@ -33,12 +31,7 @@ const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#4f46e5'];
 type DetailType = 'total' | 'in-use' | 'maintenance' | 'retired' | null;
 
 const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) => {
-  const [aiInsight, setAiInsight] = useState<string>("Gerando insights inteligentes...");
   const [selectedDetail, setSelectedDetail] = useState<DetailType>(null);
-
-  useEffect(() => {
-    generateAssetReportSummary(assets).then(setAiInsight);
-  }, [assets]);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -127,18 +120,6 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
            </div>
         </div>
       )}
-
-      <div className="bg-gradient-to-br from-blue-700 to-indigo-800 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-blue-200 relative overflow-hidden group">
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-4">
-            <Sparkles className="w-6 h-6 text-blue-100" />
-            <h3 className="font-black text-lg uppercase tracking-widest">Insights Estratégicos</h3>
-          </div>
-          <p className="text-white leading-relaxed text-lg font-semibold italic">
-            "{aiInsight}"
-          </p>
-        </div>
-      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, idx) => (

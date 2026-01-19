@@ -6,10 +6,10 @@ import { db } from '../services/supabase';
 
 interface AuthProps {
   onLogin: (user: UserAccount) => void;
-  users: UserAccount[]; // Mantido por compatibilidade de interface, mas ignorado no login direto
+  users: UserAccount[];
 }
 
-const Auth: React.FC<AuthProps> = ({ onLogin }) => {
+const Auth: React.FC<AuthProps> = ({ onLogin, users }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,11 +21,16 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     setIsAuthenticating(true);
 
     try {
-      // SEGURANÇA: Busca direta no Supabase para evitar vazamento da tabela inteira
-      const foundUser = await db.users.getForAuth(username.toLowerCase());
+      // Tenta autenticação direta pelo Supabase
+      let foundUser = await db.users.getForAuth(username.toLowerCase());
+
+      // Fallback para a lista de usuários injetada (MOCK ou Cache Local) caso o banco falhe ou não retorne
+      if (!foundUser) {
+        foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase()) || null;
+      }
 
       if (foundUser) {
-        // Validação de senha (em produção, use hashes com Supabase Auth)
+        // Validação de senha simples
         const isValid = foundUser.password === password || (!foundUser.password && password === 'admin');
         
         if (isValid) {

@@ -1,13 +1,5 @@
 
-export type AssetType = 
-  | 'Desktop' 
-  | 'Notebook' 
-  | 'Mouse' 
-  | 'Cabo' 
-  | 'Monitor' 
-  | 'Teclado' 
-  | 'Headset' 
-  | 'Suporte Notebook';
+export type AssetType = string;
 
 export type AssetStatus = 'Disponível' | 'Em Uso' | 'Manutenção' | 'Baixado' | 'Pendente Documentos';
 
@@ -17,7 +9,7 @@ export interface HistoryEntry {
   type: 'Manutenção' | 'Atribuição' | 'Status' | 'Criação' | 'Observação';
   description: string;
   performedBy?: string;
-  userContext?: string; // Nome do colaborador envolvido, se houver
+  userContext?: string; 
 }
 
 export interface Department {
@@ -27,9 +19,29 @@ export interface Department {
   createdAt: string;
 }
 
+export interface AccountingAccount {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface AccountingClassification {
+  id: string;
+  name: string;
+  code: string;
+  accountId: string;
+}
+
+export interface AssetTypeConfig {
+  id: string;
+  name: string;
+  classificationId?: string;
+}
+
 export interface Asset {
   id: string;
-  departmentId: string; // Vínculo com o departamento
+  serialNumber?: string;
+  departmentId: string;
   type: AssetType;
   brand: string;
   model: string;
@@ -45,19 +57,21 @@ export interface Asset {
   observations: string;
   photos: string[];
   status: AssetStatus;
-  assignedTo?: string; // Employee ID
+  assignedTo?: string; 
   qrCode: string;
   createdAt: string;
-  history: HistoryEntry[]; // Novo campo para rastreio
+  history: HistoryEntry[]; 
+  purchaseValue?: number; // Novo campo para valor de aquisição
 }
 
 export interface Employee {
   id: string;
-  departmentId: string; // Vínculo com o departamento
+  departmentId: string;
   name: string;
   sector: string;
   role: string;
   cpf: string;
+  isActive?: boolean;
 }
 
 export type AppModule = 
@@ -70,7 +84,8 @@ export type AppModule =
   | 'printing' 
   | 'user-management' 
   | 'inventory-check'
-  | 'maintenance';
+  | 'maintenance'
+  | 'accounting';
 
 export interface UserAccount {
   id: string;
@@ -79,6 +94,17 @@ export interface UserAccount {
   password?: string;
   sector: string;
   modules: AppModule[];
+  employeeId?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'maintenance' | 'delivery' | 'alert';
+  createdAt: string;
+  targetModule?: AppModule;
+  isRead?: boolean;
 }
 
 export interface Quotation {

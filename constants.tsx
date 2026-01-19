@@ -24,6 +24,7 @@ export const ALL_MODULES: { id: AppModule; label: string }[] = [
   { id: 'printing', label: 'Gerenciamento de Impressões' },
   { id: 'user-management', label: 'Gestão de Usuários' },
   { id: 'inventory-check', label: 'Check semestral' },
+  { id: 'accounting', label: 'Classificação Contábil' },
 ];
 
 export const MOCK_USERS: UserAccount[] = [
@@ -32,7 +33,7 @@ export const MOCK_USERS: UserAccount[] = [
     name: 'Administrador Master', 
     username: 'admin', 
     sector: 'TI',
-    modules: ['dashboard', 'departments', 'assets', 'maintenance', 'employees', 'requests', 'purchase-orders', 'printing', 'user-management', 'inventory-check'] 
+    modules: ['dashboard', 'departments', 'assets', 'maintenance', 'employees', 'requests', 'purchase-orders', 'printing', 'user-management', 'inventory-check', 'accounting'] 
   },
   { 
     id: '2', 
@@ -60,7 +61,6 @@ export const MOCK_ASSETS: Asset[] = [
     assignedTo: '1',
     qrCode: 'AST-001-QR',
     createdAt: '2023-10-01',
-    // Fix: Adding missing history property required by Asset interface
     history: []
   },
   {
@@ -74,11 +74,18 @@ export const MOCK_ASSETS: Asset[] = [
     status: 'Disponível',
     qrCode: 'AST-002-QR',
     createdAt: '2023-11-15',
-    // Fix: Adding missing history property required by Asset interface
     history: []
   }
 ];
 
 export const ASSET_TYPES = [
-  'Desktop', 'Notebook', 'Mouse', 'Cabo', 'Monitor', 'Teclado', 'Headset', 'Suporte Notebook'
+  'Desktop', 
+  'Notebook', 
+  'Mouse', 
+  'Cabo', 
+  'Monitor', 
+  'Teclado', 
+  'Headset', 
+  'Suporte Notebook',
+  'Peças de reposição'
 ];

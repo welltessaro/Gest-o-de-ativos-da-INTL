@@ -1,52 +1,54 @@
 
 import React, { useState } from 'react';
 import { 
-  FileText, 
-  Plus, 
-  X, 
-  Clock, 
-  ChevronRight, 
-  CheckCircle, 
-  ShoppingCart, 
-  Link as LinkIcon, 
-  Search, 
-  AlertCircle,
-  User,
-  Calendar,
-  Package,
-  Check,
-  Ban,
-  Truck,
-  MessageSquare,
-  CheckSquare,
-  Wrench
+  FileText, Plus, X, Clock, ChevronRight, CheckCircle, ShoppingCart, Link as LinkIcon, 
+  Search, AlertCircle, User, Calendar, Package, Check, Ban, Truck, MessageSquare, 
+  CheckSquare, Wrench, UserPlus, Loader2, ShieldCheck, Edit2, Trash2, Download, ImageIcon,
+  Printer
 } from 'lucide-react';
-import { EquipmentRequest, Employee, Asset, AssetType, ItemFulfillment } from '../types';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
+import { EquipmentRequest, Employee, Asset, AssetType, UserAccount, AssetTypeConfig } from '../types';
 import { ASSET_TYPES } from '../constants';
 
 interface RequestsManagerProps {
   requests: EquipmentRequest[];
   employees: Employee[];
   assets: Asset[];
-  onAddRequest: (req: Omit<EquipmentRequest, 'id' | 'createdAt' | 'status'>) => void;
-  onUpdateStatus: (id: string, status: EquipmentRequest['status']) => void;
-  onUpdateRequest: (req: EquipmentRequest) => void;
+  currentUser: UserAccount;
+  onAddRequest: (req: Omit<EquipmentRequest, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  onUpdateStatus: (id: string, status: EquipmentRequest['status']) => Promise<void>;
+  onUpdateRequest: (req: EquipmentRequest) => Promise<void>;
+  onRemoveRequest?: (id: string) => Promise<void>;
+  assetTypeConfigs: AssetTypeConfig[];
 }
 
-const RequestsManager: React.FC<RequestsManagerProps> = ({ requests, employees, assets, onAddRequest, onUpdateStatus, onUpdateRequest }) => {
+const RequestsManager: React.FC<RequestsManagerProps> = ({ 
+  requests, 
+  employees, 
+  assets, 
+  currentUser, 
+  onAddRequest, 
+  onUpdateStatus, 
+  onUpdateRequest, 
+  onRemoveRequest,
+  assetTypeConfigs 
+}) => {
   const [showModal, setShowModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<EquipmentRequest | null>(null);
   const [itemToLink, setItemToLink] = useState<{ index: number; type: AssetType } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [newReq, setNewReq] = useState<Omit<EquipmentRequest, 'id' | 'createdAt' | 'status'>>({
-    requesterId: '2', 
+    requesterId: currentUser.id, 
     employeeId: '',
     items: [],
     observation: ''
   });
 
-  const getEmployeeName = (id: string) => employees.find(e => e.id === id)?.name || 'Desconhecido';
-  const getEmployeeSector = (id: string) => employees.find(e => e.id === id)?.sector || 'Setor não informado';
-
+  const getEmployee = (id: string) => employees.find(e => e.id === id);
+  const getEmployeeName = (id: string) => getEmployee(id)?.name || 'Desconhecido';
+  
   const toggleItem = (type: AssetType) => {
     setNewReq(prev => ({
       ...prev,
@@ -54,45 +56,124 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({ requests, employees, 
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onAddRequest(newReq);
-    setShowModal(false);
-    setNewReq({ requesterId: '2', employeeId: '', items: [], observation: '' });
+  const generateResponsibilityTerm = (req: EquipmentRequest) => {
+    const employee = getEmployee(req.employeeId);
+    if (!employee) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Cabeçalho
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('TERMO DE RESPONSABILIDADE E ENTREGA', pageWidth / 2, 20, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Protocolo: ${req.id}`, pageWidth - 20, 30, { align: 'right' });
+    doc.text(`Data: ${new Date(req.createdAt).toLocaleDateString('pt-BR')}`, pageWidth - 20, 35, { align: 'right' });
+
+    // Dados do Colaborador
+    doc.setFont('helvetica', 'bold');
+    doc.text('1. IDENTIFICAÇÃO DO COLABORADOR', 20, 50);
+    doc.line(20, 52, pageWidth - 20, 52);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Nome: ${employee.name}`, 20, 60);
+    doc.text(`CPF: ${employee.cpf}`, 20, 65);
+    doc.text(`Departamento: ${employee.sector} / ${employee.role}`, 20, 70);
+
+    // Lista de Equipamentos
+    doc.setFont('helvetica', 'bold');
+    doc.text('2. EQUIPAMENTOS ENTREGUES', 20, 85);
+    doc.line(20, 87, pageWidth - 20, 87);
+
+    const tableData = (req.itemFulfillments || []).map(f => {
+      const asset = assets.find(a => a.id === f.linkedAssetId);
+      return [
+        f.type,
+        asset?.brand || 'N/A',
+        asset?.model || 'N/A',
+        asset?.id || 'Pendente',
+        asset?.serialNumber || 'S/N'
+      ];
+    });
+
+    (doc as any).autoTable({
+      startY: 92,
+      head: [['Tipo', 'Marca', 'Modelo', 'Patrimônio', 'Série']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillGray: 200, textColor: 0, fontStyle: 'bold' },
+      styles: { fontSize: 9 }
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY + 15;
+
+    // Termos
+    doc.setFont('helvetica', 'bold');
+    doc.text('3. DECLARAÇÃO DE RESPONSABILIDADE', 20, finalY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    const text = `Declaro ter recebido os equipamentos acima descritos em perfeito estado de conservação e funcionamento, comprometendo-me a utilizá-los exclusivamente para fins profissionais de interesse da empresa. Assumo total responsabilidade pela guarda, conservação e integridade dos mesmos, ciente de que danos causados por uso indevido ou negligência poderão ser objeto de ressarcimento conforme legislação vigente. Em caso de desligamento, comprometo-me a devolver os itens imediatamente ao setor de TI.`;
+    const splitText = doc.splitTextToSize(text, pageWidth - 40);
+    doc.text(splitText, 20, finalY + 7);
+
+    // Assinaturas
+    const sigY = finalY + 60;
+    doc.line(20, sigY, 90, sigY);
+    doc.text('Assinatura do Colaborador', 35, sigY + 5);
+    
+    doc.line(120, sigY, 190, sigY);
+    doc.text('Responsável TI (Entrega)', 135, sigY + 5);
+
+    doc.save(`Termo_Responsabilidade_${req.id}.pdf`);
   };
 
-  const handleLinkAsset = (index: number, assetId: string) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newReq.items.length === 0 || !newReq.employeeId) {
+      alert("Preencha todos os campos.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await onAddRequest({
+        ...newReq,
+        itemFulfillments: newReq.items.map(type => ({ type, isPurchaseOrder: false }))
+      });
+      setShowModal(false);
+      setNewReq({ requesterId: currentUser.id, employeeId: '', items: [], observation: '' });
+    } catch (err) { alert("Erro ao criar requisição."); }
+    finally { setIsSubmitting(false); }
+  };
+
+  const handleLinkAsset = async (index: number, assetId: string) => {
     if (!selectedRequest) return;
     const newFulfillments = [...(selectedRequest.itemFulfillments || [])];
-    newFulfillments[index] = {
-      type: selectedRequest.items[index],
-      linkedAssetId: assetId,
-      isPurchaseOrder: false
-    };
+    newFulfillments[index] = { type: selectedRequest.items[index], linkedAssetId: assetId, isPurchaseOrder: false };
     const updated = { ...selectedRequest, itemFulfillments: newFulfillments };
-    onUpdateRequest(updated);
+    await onUpdateRequest(updated);
     setSelectedRequest(updated);
     setItemToLink(null);
   };
 
-  const handleMarkForPurchase = (index: number) => {
-    if (!selectedRequest) return;
-    const newFulfillments = [...(selectedRequest.itemFulfillments || [])];
-    newFulfillments[index] = {
-      type: selectedRequest.items[index],
-      linkedAssetId: undefined,
-      isPurchaseOrder: true,
-      purchaseStatus: 'Pendente'
-    };
-    const updated = { ...selectedRequest, itemFulfillments: newFulfillments };
-    onUpdateRequest(updated);
-    setSelectedRequest(updated);
+  const handleStatusChange = async (status: EquipmentRequest['status']) => {
+    if (selectedRequest) {
+      const updated = { ...selectedRequest, status };
+      await onUpdateRequest(updated);
+      setSelectedRequest(updated);
+    }
   };
 
-  const handleStatusChange = (status: EquipmentRequest['status']) => {
-    if (selectedRequest) {
-      onUpdateStatus(selectedRequest.id, status);
-      setSelectedRequest(prev => prev ? { ...prev, status } : null);
+  const handleRemove = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!onRemoveRequest) return;
+    if (confirm("Tem certeza que deseja excluir permanentemente esta requisição?")) {
+      try {
+        await onRemoveRequest(id);
+        if (selectedRequest?.id === id) setSelectedRequest(null);
+      } catch (err) { alert("Falha ao excluir requisição."); }
     }
   };
 
@@ -102,8 +183,8 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({ requests, employees, 
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative">
-      <div className="lg:col-span-2 space-y-4">
-        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+      <div className="lg:col-span-2 space-y-4 print:hidden">
+        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 uppercase tracking-tight">
           <Clock className="w-5 h-5 text-blue-600" /> Fluxo de Atendimento
         </h3>
         
@@ -114,40 +195,32 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({ requests, employees, 
             className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between hover:shadow-md transition-all group cursor-pointer border-l-4 border-l-transparent hover:border-l-blue-600"
           >
             <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
                 req.status === 'Pendente' ? 'bg-amber-100 text-amber-700' :
                 req.status === 'Aprovado' ? 'bg-blue-100 text-blue-700' :
                 req.status === 'Preparando' ? 'bg-indigo-100 text-indigo-700' :
                 req.status === 'Entregue' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
               }`}>
-                {req.status === 'Preparando' ? <Wrench className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+                {req.status === 'Preparando' ? <Wrench className="w-6 h-6" /> : req.status === 'Entregue' ? <ShieldCheck className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-black text-slate-900">{req.id}</p>
-                  {req.itemFulfillments?.some(f => f.isPurchaseOrder) && (
-                    <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1 border border-amber-200">
-                      <ShoppingCart className="w-2.5 h-2.5" /> Compra
-                    </span>
-                  )}
-                </div>
+                <p className="font-black text-slate-900">{req.id}</p>
                 <p className="text-sm text-slate-600 font-semibold">Para: {getEmployeeName(req.employeeId)}</p>
               </div>
             </div>
             
-            <div className="flex items-center gap-6">
-               <div className="hidden md:flex flex-col items-end">
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Itens</span>
-                  <span className="text-sm font-black text-slate-800">{req.items.length} eqp.</span>
-               </div>
+            <div className="flex items-center gap-4">
                <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-tight ${
-                 req.status === 'Pendente' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 
-                 req.status === 'Aprovado' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
-                 req.status === 'Preparando' ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' :
-                 req.status === 'Entregue' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200'
+                 req.status === 'Pendente' ? 'bg-amber-100 text-amber-800 border-amber-200' : 
+                 req.status === 'Aprovado' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                 req.status === 'Preparando' ? 'bg-indigo-100 text-indigo-800 border-indigo-200' :
+                 req.status === 'Entregue' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-rose-100 text-rose-800 border-rose-200'
                }`}>
                  {req.status}
                </span>
+               <button onClick={(e) => handleRemove(e, req.id)} className="p-2 text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
+                 <Trash2 className="w-5 h-5" />
+               </button>
                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-blue-600 transition-transform group-hover:translate-x-1" />
             </div>
           </div>
@@ -155,225 +228,135 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({ requests, employees, 
 
         {requests.length === 0 && (
           <div className="bg-white p-16 rounded-[2.5rem] border border-dashed border-slate-300 text-center space-y-4">
-             <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
-                <FileText className="w-10 h-10 text-slate-300" />
-             </div>
-             <p className="text-slate-600 font-black uppercase tracking-widest text-xs">Nenhuma solicitação pendente de triagem.</p>
+             <p className="text-slate-600 font-black uppercase tracking-widest text-xs">Nenhuma solicitação encontrada.</p>
           </div>
         )}
       </div>
 
-      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl h-fit space-y-6 sticky top-24">
-        <div className="bg-blue-50 p-5 rounded-3xl mb-6 border border-blue-100">
-           <div className="flex items-center gap-2 text-blue-700 mb-2">
-             <AlertCircle className="w-5 h-5" />
-             <h4 className="font-black text-sm uppercase tracking-widest">Triagem de Ativos</h4>
-           </div>
-           <p className="text-xs text-blue-800 leading-relaxed font-semibold">
-             Toda requisição deve ser vinculada a um item do inventário ou gerar um pedido de compra aprovado pela diretoria.
-           </p>
-        </div>
-
+      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl h-fit space-y-6 sticky top-24 print:hidden">
         <button 
           onClick={() => setShowModal(true)}
-          className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 group uppercase tracking-widest text-xs"
+          className="w-full bg-slate-900 hover:bg-black text-white font-black py-5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-xs"
         >
-          <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
-          <span>Abrir Nova Requisição</span>
+          <Plus className="w-5 h-5" />
+          <span>Nova Requisição</span>
         </button>
       </div>
+
+      {showModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+           <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+              <div className="bg-slate-900 p-8 text-white flex items-center justify-between">
+                 <h3 className="text-xl font-black uppercase tracking-tight">Nova Requisição</h3>
+                 <button onClick={() => setShowModal(false)} className="p-2 hover:bg-white/10 rounded-full"><X className="w-6 h-6" /></button>
+              </div>
+              <form onSubmit={handleSubmit} className="p-10 space-y-8 overflow-y-auto flex-1">
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaborador</label>
+                    <select className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold" value={newReq.employeeId} onChange={e => setNewReq({...newReq, employeeId: e.target.value})} required>
+                       <option value="">Selecione...</option>
+                       {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+                    </select>
+                 </div>
+                 <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Itens</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                       {(assetTypeConfigs.length > 0 ? assetTypeConfigs.map(t => t.name) : ASSET_TYPES).map(type => (
+                         <button key={type} type="button" onClick={() => toggleItem(type as AssetType)} className={`p-3 rounded-xl border text-[10px] font-black uppercase ${newReq.items.includes(type as AssetType) ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'}`}>
+                           {type}
+                         </button>
+                       ))}
+                    </div>
+                 </div>
+                 <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white font-black py-5 rounded-[2rem] shadow-xl uppercase tracking-widest text-xs disabled:bg-slate-300">
+                    {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Abrir Requisição"}
+                 </button>
+              </form>
+           </div>
+        </div>
+      )}
 
       {selectedRequest && (
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => { setSelectedRequest(null); setItemToLink(null); }} />
-          <div className="relative w-full max-w-xl bg-white h-full shadow-2xl flex flex-col animate-slide-in-right border-l border-slate-200">
-            <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-white">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-100">
-                  <CheckSquare className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black text-slate-900">Triagem Técnica</h3>
-                  <p className="text-sm text-slate-600 font-bold">{selectedRequest.id}</p>
-                </div>
+          <div className="relative w-full max-w-xl bg-white h-full shadow-2xl flex flex-col border-l border-slate-200">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-black text-slate-900">{selectedRequest.id}</h3>
+                <p className="text-sm text-slate-600 font-bold">Destino: {getEmployeeName(selectedRequest.employeeId)}</p>
               </div>
-              <button onClick={() => { setSelectedRequest(null); setItemToLink(null); }} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-slate-900">
-                <X className="w-6 h-6" />
-              </button>
+              <div className="flex items-center gap-2">
+                 <button onClick={(e) => handleRemove(e, selectedRequest.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-full transition-colors" title="Excluir Requisição">
+                   <Trash2 className="w-5 h-5" />
+                 </button>
+                 <button onClick={() => { setSelectedRequest(null); setItemToLink(null); }} className="p-2 hover:bg-slate-100 rounded-full text-slate-500"><X className="w-6 h-6" /></button>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-white">
-               <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-white border border-slate-300 flex items-center justify-center text-slate-500">
-                      <User className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-slate-900">{getEmployeeName(selectedRequest.employeeId)}</p>
-                      <p className="text-xs text-slate-700 font-bold uppercase tracking-tight">{getEmployeeSector(selectedRequest.employeeId)}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Data Solicitação</p>
-                    <p className="text-xs font-black text-slate-900">{selectedRequest.createdAt}</p>
-                  </div>
-               </div>
-
-               <div className="space-y-4">
-                 <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                   <Package className="w-4 h-4 text-blue-600" /> Itens Requisitados ({selectedRequest.items.length})
-                 </h4>
-                 
-                 <div className="space-y-4">
-                    {selectedRequest.items.map((itemType, idx) => {
-                      const fulfillment = selectedRequest.itemFulfillments?.[idx];
-                      const isLinked = !!fulfillment?.linkedAssetId;
-                      const isPurchase = !!fulfillment?.isPurchaseOrder;
-
-                      return (
-                        <div key={idx} className={`border p-5 rounded-3xl transition-all ${
-                          isLinked ? 'bg-emerald-50 border-emerald-200' : 
-                          isPurchase ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200 shadow-sm'
-                        }`}>
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                                isLinked ? 'bg-emerald-100 text-emerald-800' : 
-                                isPurchase ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
-                              }`}>
-                                <Package className="w-5 h-5" />
-                              </div>
-                              <span className="font-black text-slate-900">{itemType}</span>
-                            </div>
-                            
-                            {isLinked ? (
-                              <div className="flex items-center gap-1 text-emerald-800">
-                                <CheckCircle className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase tracking-tight">Vinculado: {fulfillment.linkedAssetId}</span>
-                              </div>
-                            ) : isPurchase ? (
-                              <div className={`flex items-center gap-1 ${fulfillment.purchaseStatus === 'Aprovado' ? 'text-emerald-800' : 'text-amber-800'}`}>
-                                <ShoppingCart className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase tracking-tight">Pedido: {fulfillment.purchaseStatus}</span>
-                              </div>
-                            ) : (
-                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Aguardando Triagem</span>
-                            )}
-                          </div>
-
-                          {!isLinked && !isPurchase && (
-                            <div className="grid grid-cols-2 gap-3">
-                               <button 
-                                onClick={() => setItemToLink({ index: idx, type: itemType })}
-                                className="bg-white border border-slate-300 py-2.5 rounded-2xl text-xs font-black text-slate-800 flex items-center justify-center gap-2 hover:bg-slate-900 hover:text-white transition-all shadow-sm uppercase tracking-widest"
-                               >
-                                 <LinkIcon className="w-3.5 h-3.5" /> Vincular Estoque
-                               </button>
-                               <button 
-                                onClick={() => handleMarkForPurchase(idx)}
-                                className="bg-white border border-slate-300 py-2.5 rounded-2xl text-xs font-black text-slate-800 flex items-center justify-center gap-2 hover:bg-slate-900 hover:text-white transition-all shadow-sm uppercase tracking-widest"
-                               >
-                                 <ShoppingCart className="w-3.5 h-3.5" /> Pedido Compra
-                               </button>
-                            </div>
-                          )}
-
-                          {itemToLink?.index === idx && (
-                            <div className="mt-4 p-4 bg-slate-100 rounded-2xl border border-slate-300 animate-in fade-in zoom-in-95">
-                               <div className="flex items-center justify-between mb-3">
-                                  <h5 className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Escolha um item disponível:</h5>
-                                  <button onClick={() => setItemToLink(null)} className="text-slate-500 hover:text-slate-900">
-                                    <X className="w-3 h-3" />
-                                  </button>
-                               </div>
-                               <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
-                                  {availableAssetsByType(itemType).length > 0 ? (
-                                    availableAssetsByType(itemType).map(asset => (
-                                      <button 
-                                        key={asset.id}
-                                        onClick={() => handleLinkAsset(idx, asset.id)}
-                                        className="w-full text-left p-3 rounded-xl bg-white border border-slate-300 hover:border-blue-600 hover:shadow-sm transition-all flex items-center justify-between group"
-                                      >
-                                         <div>
-                                           <p className="text-xs font-black text-slate-900">{asset.id}</p>
-                                           <p className="text-[10px] text-slate-700 font-semibold">{asset.brand} - {asset.model}</p>
-                                         </div>
-                                         <Plus className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
-                                      </button>
-                                    ))
-                                  ) : (
-                                    <div className="text-center py-4 space-y-2">
-                                       <AlertCircle className="w-6 h-6 text-slate-400 mx-auto" />
-                                       <p className="text-[10px] text-slate-600 font-bold uppercase">Ops! Não há saldo disponível para "{itemType}" no inventário.</p>
-                                    </div>
-                                  )}
-                               </div>
-                            </div>
-                          )}
+            <div className="flex-1 overflow-y-auto p-8 space-y-6">
+               {selectedRequest.items.map((itemType, idx) => {
+                  const fulfillment = selectedRequest.itemFulfillments?.[idx];
+                  const isLinked = !!fulfillment?.linkedAssetId;
+                  return (
+                    <div key={idx} className={`p-5 rounded-3xl border ${isLinked ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200'}`}>
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="font-black text-slate-900">{itemType}</span>
+                        {isLinked && <span className="text-[10px] font-black uppercase text-emerald-800">Vinculado: {fulfillment.linkedAssetId}</span>}
+                      </div>
+                      {!isLinked && selectedRequest.status !== 'Entregue' && (
+                        <button onClick={() => setItemToLink({ index: idx, type: itemType })} className="w-full py-2 bg-slate-100 rounded-xl text-[10px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all">
+                          Vincular Ativo
+                        </button>
+                      )}
+                      {itemToLink?.index === idx && (
+                        <div className="mt-4 p-4 bg-slate-100 rounded-2xl border border-slate-300">
+                           <div className="space-y-2">
+                              {availableAssetsByType(itemType).map(asset => (
+                                <button key={asset.id} onClick={() => handleLinkAsset(idx, asset.id)} className="w-full text-left p-3 bg-white border border-slate-300 rounded-xl hover:border-blue-600">
+                                   <p className="text-xs font-black">{asset.id} - {asset.brand} {asset.model}</p>
+                                </button>
+                              ))}
+                              {availableAssetsByType(itemType).length === 0 && <p className="text-[10px] font-black text-slate-400 text-center uppercase">Sem estoque disponível</p>}
+                           </div>
                         </div>
-                      );
-                    })}
-                 </div>
-               </div>
-
-               <div className="space-y-3">
-                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-blue-600" /> Justificativa
-                  </h4>
-                  <div className="p-5 bg-white rounded-3xl border border-blue-200 text-sm text-slate-800 leading-relaxed font-semibold italic shadow-sm">
-                    "{selectedRequest.observation || "Nenhuma observação informada pelo solicitante."}"
-                  </div>
-               </div>
+                      )}
+                    </div>
+                  );
+               })}
             </div>
-
-            <div className="p-6 border-t border-slate-200 bg-slate-50 flex flex-col gap-3">
-               <div className="flex flex-col gap-2">
-                 {selectedRequest.status === 'Pendente' && (
-                   <button 
-                    onClick={() => handleStatusChange('Aprovado')}
-                    disabled={selectedRequest.itemFulfillments?.length === 0}
-                    className="w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all bg-blue-600 text-white hover:bg-blue-700 shadow-xl shadow-blue-100 uppercase tracking-widest text-xs"
-                   >
-                     <Check className="w-5 h-5" />
-                     Aprovar e Avançar para Preparação
-                   </button>
-                 )}
-
-                 {selectedRequest.status === 'Aprovado' && (
-                    <button 
-                      onClick={() => handleStatusChange('Preparando')}
-                      className="w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-100 uppercase tracking-widest text-xs"
-                    >
-                      <Wrench className="w-5 h-5" />
-                      Iniciar Preparação Técnica
-                    </button>
-                 )}
-
-                 {(selectedRequest.status === 'Aprovado' || selectedRequest.status === 'Preparando') && (
-                    <button 
-                      onClick={() => handleStatusChange('Entregue')}
-                      disabled={selectedRequest.itemFulfillments?.some(f => !f.linkedAssetId && !(f.isPurchaseOrder && f.purchaseStatus === 'Comprado'))}
-                      className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all uppercase tracking-widest text-xs ${
-                        selectedRequest.itemFulfillments?.some(f => !f.linkedAssetId && !(f.isPurchaseOrder && f.purchaseStatus === 'Comprado'))
-                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300'
-                          : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xl shadow-emerald-100'
-                      }`}
-                    >
-                      <Truck className="w-5 h-5" />
-                      Finalizar Entrega ao Colaborador
-                    </button>
-                 )}
-               </div>
-               
-               {selectedRequest.status === 'Entregue' && (
-                 <div className="p-4 bg-emerald-100 rounded-2xl border border-emerald-300 flex items-center gap-3 text-emerald-800 font-black justify-center uppercase tracking-widest text-[10px]">
-                    <CheckCircle className="w-5 h-5" />
-                    Requisição Finalizada com Sucesso
-                 </div>
+            
+            <div className="p-8 border-t border-slate-200 flex flex-col gap-3">
+               {selectedRequest.status === 'Pendente' && <button onClick={() => handleStatusChange('Aprovado')} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs">Aprovar Pedido</button>}
+               {selectedRequest.status === 'Aprovado' && <button onClick={() => handleStatusChange('Preparando')} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs">Iniciar Preparação</button>}
+               {selectedRequest.status === 'Preparando' && (
+                 <button 
+                  onClick={() => {
+                    const allLinked = selectedRequest.itemFulfillments?.every(f => f.linkedAssetId || f.isPurchaseOrder);
+                    if (!allLinked) {
+                      alert("Vincule todos os ativos antes de confirmar a entrega.");
+                      return;
+                    }
+                    handleStatusChange('Entregue');
+                  }} 
+                  className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-xs shadow-lg shadow-emerald-100"
+                 >
+                   Confirmar Entrega
+                 </button>
                )}
-
-               {selectedRequest.itemFulfillments?.some(f => !f.linkedAssetId && !f.isPurchaseOrder) && selectedRequest.status === 'Pendente' && (
-                 <p className="text-[10px] text-center text-rose-700 font-black uppercase tracking-tight">Atenção: Existem itens pendentes de triagem/vínculo.</p>
+               {selectedRequest.status === 'Entregue' && (
+                 <div className="space-y-3">
+                   <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3">
+                     <CheckCircle className="w-5 h-5 text-emerald-600" />
+                     <span className="text-xs font-black uppercase text-emerald-800 tracking-tight">Solicitação Finalizada</span>
+                   </div>
+                   <button 
+                    onClick={() => generateResponsibilityTerm(selectedRequest)}
+                    className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
+                   >
+                     <Printer className="w-5 h-5" />
+                     Imprimir Termo de Entrega
+                   </button>
+                 </div>
                )}
             </div>
           </div>

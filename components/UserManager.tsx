@@ -1,17 +1,18 @@
 
-import React, { useState } from 'react';
-import { UserPlus, Search, Trash2, Shield, User as UserIcon, X, Check, Edit2, Key, LayoutGrid, Star } from 'lucide-react';
-import { UserAccount, AppModule } from '../types';
+import React, { useState, useEffect } from 'react';
+import { UserPlus, Search, Trash2, Shield, User as UserIcon, X, Check, Edit2, Key, LayoutGrid, Star, Users, Briefcase } from 'lucide-react';
+import { UserAccount, AppModule, Employee } from '../types';
 import { ALL_MODULES } from '../constants';
 
 interface UserManagerProps {
   users: UserAccount[];
+  employees: Employee[];
   onAddUser: (user: Omit<UserAccount, 'id'>) => void;
   onUpdateUser: (user: UserAccount) => void;
   onRemoveUser: (id: string) => void;
 }
 
-const UserManager: React.FC<UserManagerProps> = ({ users, onAddUser, onUpdateUser, onRemoveUser }) => {
+const UserManager: React.FC<UserManagerProps> = ({ users, employees, onAddUser, onUpdateUser, onRemoveUser }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,12 +22,13 @@ const UserManager: React.FC<UserManagerProps> = ({ users, onAddUser, onUpdateUse
     username: '',
     password: '',
     sector: '',
-    modules: []
+    modules: [],
+    employeeId: ''
   });
 
   const handleOpenCreate = () => {
     setEditingUser(null);
-    setFormData({ name: '', username: '', password: '', sector: '', modules: [] });
+    setFormData({ name: '', username: '', password: '', sector: '', modules: [], employeeId: '' });
     setShowForm(true);
   };
 
@@ -37,13 +39,38 @@ const UserManager: React.FC<UserManagerProps> = ({ users, onAddUser, onUpdateUse
       username: user.username, 
       password: '', 
       sector: user.sector, 
-      modules: user.modules 
+      modules: user.modules,
+      employeeId: user.employeeId || ''
     });
     setShowForm(true);
   };
 
+  const handleEmployeeChange = (employeeId: string) => {
+    const emp = employees.find(e => e.id === employeeId);
+    if (emp) {
+      setFormData(prev => ({
+        ...prev,
+        employeeId,
+        name: emp.name,
+        sector: emp.sector
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        employeeId: '',
+        name: '',
+        sector: ''
+      }));
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.employeeId && !editingUser?.username.includes('admin')) {
+      alert("É obrigatório vincular um colaborador para criar uma conta de usuário.");
+      return;
+    }
+
     if (editingUser) {
       const updatedUser: UserAccount = {
         ...editingUser,
@@ -101,7 +128,7 @@ const UserManager: React.FC<UserManagerProps> = ({ users, onAddUser, onUpdateUse
           <thead className="bg-slate-50 border-b border-slate-100">
             <tr>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Usuário</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Setor</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Setor Oficial</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Acesso</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-right">Ações</th>
             </tr>
@@ -127,7 +154,7 @@ const UserManager: React.FC<UserManagerProps> = ({ users, onAddUser, onUpdateUse
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-400 font-medium">@{user.username}</p>
+                      <p className="text-xs text-slate-400 font-medium">@{user.username} {user.employeeId ? '• Vinculado ao RH' : '• Usuário Externo'}</p>
                     </div>
                   </div>
                 </td>
@@ -189,7 +216,7 @@ const UserManager: React.FC<UserManagerProps> = ({ users, onAddUser, onUpdateUse
                     <h3 className="text-2xl font-black text-slate-800 tracking-tight">
                       {editingUser ? 'Editar Perfil' : 'Novo Usuário do Sistema'}
                     </h3>
-                    <p className="text-sm text-slate-500">Configure as credenciais e o nível de acesso.</p>
+                    <p className="text-sm text-slate-500">Vincule um colaborador para relatórios auditáveis.</p>
                   </div>
                </div>
                <button onClick={() => setShowForm(false)} className="p-2 hover:bg-slate-100 rounded-full">
@@ -198,30 +225,49 @@ const UserManager: React.FC<UserManagerProps> = ({ users, onAddUser, onUpdateUse
             </div>
             
             <form onSubmit={handleSubmit} className="space-y-6 overflow-y-auto pr-2 custom-scrollbar">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-blue-50 p-6 rounded-[2rem] border border-blue-100 space-y-4">
+                <div className="flex items-center gap-2 text-blue-700">
+                   <Users className="w-5 h-5" />
+                   <label className="text-xs font-black uppercase tracking-widest">Vincular Colaborador (Obrigatório)</label>
+                </div>
+                <div className="relative">
+                   <select 
+                     className="w-full p-4 rounded-xl bg-white border border-blue-200 outline-none font-bold text-slate-800 appearance-none shadow-sm focus:ring-2 focus:ring-blue-500"
+                     value={formData.employeeId}
+                     onChange={(e) => handleEmployeeChange(e.target.value)}
+                     required={!editingUser?.username.includes('admin')}
+                   >
+                     <option value="">Selecione o funcionário no RH...</option>
+                     {employees.map(emp => (
+                       <option key={emp.id} value={emp.id}>{emp.name} — {emp.role} ({emp.sector})</option>
+                     ))}
+                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-60 pointer-events-none">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-black text-slate-700 uppercase tracking-widest block">Nome Completo</label>
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-widest block">Nome Completo (RH)</label>
                   <div className="relative">
                     <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input 
-                      className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
+                      className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 bg-slate-50 outline-none font-bold"
                       value={formData.name}
-                      onChange={e => setFormData({...formData, name: e.target.value})}
-                      placeholder="Ex: João Silva"
-                      required
+                      readOnly
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-sm font-black text-slate-700 uppercase tracking-widest block">Setor</label>
-                  <input 
-                    className="w-full p-4 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
-                    value={formData.sector}
-                    onChange={e => setFormData({...formData, sector: e.target.value})}
-                    placeholder="Ex: TI, RH, Diretoria"
-                    required
-                  />
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-widest block">Setor (RH)</label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input 
+                      className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 bg-slate-50 outline-none font-bold"
+                      value={formData.sector}
+                      readOnly
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -229,7 +275,7 @@ const UserManager: React.FC<UserManagerProps> = ({ users, onAddUser, onUpdateUse
                 <div className="space-y-1.5">
                   <label className="text-sm font-black text-slate-700 uppercase tracking-widest block">Login / Usuário</label>
                   <input 
-                    className="w-full p-4 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
+                    className="w-full p-4 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm font-bold"
                     value={formData.username}
                     onChange={e => setFormData({...formData, username: e.target.value})}
                     placeholder="Ex: joao.silva"
@@ -245,10 +291,10 @@ const UserManager: React.FC<UserManagerProps> = ({ users, onAddUser, onUpdateUse
                     <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input 
                       type="password"
-                      className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
+                      className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm font-bold"
                       value={formData.password}
                       onChange={e => setFormData({...formData, password: e.target.value})}
-                      placeholder={editingUser ? "•••••••• (Vazio = sem alteração)" : "••••••••"}
+                      placeholder={editingUser ? "•••••••• (Vazio = manter)" : "••••••••"}
                       required={!editingUser}
                     />
                   </div>
@@ -291,18 +337,12 @@ const UserManager: React.FC<UserManagerProps> = ({ users, onAddUser, onUpdateUse
                     );
                   })}
                 </div>
-                <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-blue-600 shrink-0" />
-                  <p className="text-[10px] text-blue-700 font-medium leading-relaxed">
-                    <strong>Nota:</strong> Usuários com o módulo <strong>"Gestão de Usuários"</strong> ativo possuem permissão para criar novos usuários e editar as permissões de outros colaboradores, incluindo o acesso aos Dashboards de Diretoria.
-                  </p>
-                </div>
               </div>
 
               <div className="flex justify-end gap-3 mt-4 pt-6 border-t border-slate-100 shrink-0">
                 <button type="button" onClick={() => setShowForm(false)} className="px-8 py-4 font-bold text-slate-500 hover:bg-slate-50 rounded-2xl transition-all">Cancelar</button>
                 <button type="submit" className="px-12 py-4 font-black bg-slate-900 text-white rounded-2xl shadow-xl hover:bg-black transition-all">
-                  {editingUser ? 'Salvar Alterações' : 'Criar Usuário'}
+                  {editingUser ? 'Salvar Alterações' : 'Criar Conta Vinculada'}
                 </button>
               </div>
             </form>
