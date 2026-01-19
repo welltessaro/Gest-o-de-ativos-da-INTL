@@ -31,52 +31,54 @@ const App: React.FC = () => {
   const [auditSessions, setAuditSessions] = useState<AuditSession[]>([]);
   const [users, setUsers] = useState<UserAccount[]>([]);
 
-  // Carregamento inicial do Supabase
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const [depts, assts, emps, reqs, audits, userList] = await Promise.all([
-          db.departments.list().catch(() => []),
-          db.assets.list().catch(() => []),
-          db.employees.list().catch(() => []),
-          db.requests.list().catch(() => []),
-          db.auditSessions.list().catch(() => []),
-          db.users.list().catch(() => [])
-        ]);
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [depts, assts, emps, reqs, audits, userList] = await Promise.all([
+        db.departments.list().catch(() => []),
+        db.assets.list().catch(() => []),
+        db.employees.list().catch(() => []),
+        db.requests.list().catch(() => []),
+        db.auditSessions.list().catch(() => []),
+        db.users.list().catch(() => [])
+      ]);
 
-        setDepartments(depts);
-        setAssets(assts);
-        setEmployees(emps);
-        setRequests(reqs);
-        setAuditSessions(audits);
-        
-        // Se o banco estiver vazio, garantimos que exista ao menos o admin do mock para o primeiro login
-        if (userList.length === 0) {
-          setUsers(MOCK_USERS);
-        } else {
-          setUsers(userList);
-        }
-      } catch (err) {
-        setError("Erro ao conectar com o banco de dados Supabase.");
-        console.error(err);
-      } finally {
-        setIsLoading(false);
+      setDepartments(depts);
+      setAssets(assts);
+      setEmployees(emps);
+      setRequests(reqs);
+      setAuditSessions(audits);
+      
+      if (userList.length === 0) {
+        setUsers(MOCK_USERS);
+      } else {
+        setUsers(userList);
       }
-    };
+    } catch (err) {
+      setError("Erro ao conectar com o banco de dados Supabase.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadData();
   }, []);
 
   const handleLogin = async (user: UserAccount) => {
-    // Se o usuário logado for o admin mock e não estiver no banco, tentamos salvar ele
-    const userExists = users.some(u => u.id === user.id);
-    if (!userExists || user.id === '1') {
+    // Tenta persistir o usuário admin se ele vier do mock (sem ID no banco ainda)
+    const isInDatabase = users.some(u => u.username === user.username && u.id === user.id);
+    
+    if (!isInDatabase) {
       try {
         await db.users.upsert(user);
+        // Recarrega a lista de usuários para garantir sincronia
+        const userList = await db.users.list();
+        setUsers(userList);
       } catch (e) {
-        console.warn("Não foi possível persistir o usuário inicial no banco ainda.");
+        console.warn("Aviso: Não foi possível salvar o perfil do usuário no banco. Verifique as políticas de RLS.");
       }
     }
     
@@ -91,7 +93,6 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  // HANDLERS DE PERSISTÊNCIA (ASSETS)
   const handleAddAsset = async (assetData: any) => {
     const id = assetData.id || `AST-${Math.floor(Math.random() * 9000) + 1000}`;
     const initialHistory: HistoryEntry[] = assetData.history || [
@@ -127,7 +128,6 @@ const App: React.FC = () => {
     await db.assets.remove(id);
   };
 
-  // HANDLERS DE PERSISTÊNCIA (REQUESTS)
   const handleAddRequest = async (reqData: any) => {
     const id = `REQ-${Math.floor(Math.random() * 9000) + 1000}`;
     const newReq: EquipmentRequest = { 
