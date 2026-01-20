@@ -200,17 +200,35 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
     if (!detailAsset) return;
     setIsSubmitting(true);
     try {
+      // Cria uma requisição padronizada para o fluxo de compras
       await onAddRequest({
         requesterId: currentUser.id,
-        employeeId: '', 
+        employeeId: '', // Sem vínculo com funcionário específico, é peça de estoque/manutenção
         items: [poType],
-        observation: `Peça p/ Manutenção ${detailAsset.id}: ${poType}`,
-        itemFulfillments: [{ type: poType, isPurchaseOrder: true, purchaseStatus: 'Pendente' }]
+        observation: `[MANUTENÇÃO] Aquisição de peça (${poType}) para reparo do ativo ${detailAsset.id}.\nDiagnóstico Atual: ${finalDiagnosis || detailAsset.observations}`,
+        // ItemFulfillment com estrutura completa para entrar direto no fluxo de Cotação
+        itemFulfillments: [{ 
+          type: poType, 
+          isPurchaseOrder: true, 
+          purchaseStatus: 'Pendente',
+          quotations: [
+             { url: '', price: 0, deliveryPrediction: '' },
+             { url: '', price: 0, deliveryPrediction: '' },
+             { url: '', price: 0, deliveryPrediction: '' }
+          ]
+        }]
       });
       setShowPOForm(false);
-      alert("Solicitação de peça enviada para Compras.");
-    } catch (e) {
-      alert("Erro ao solicitar peça.");
+      onAddNotification({
+        title: 'Solicitação de Compra',
+        message: `Pedido de compra iniciado para ${poType} (Ref: ${detailAsset.id}).`,
+        type: 'info',
+        targetModule: 'purchase-orders'
+      });
+      alert("Fluxo de compra iniciado com sucesso!\nAcompanhe a cotação no módulo 'Pedidos de Compra'.");
+    } catch (e: any) {
+      console.error(e);
+      alert("Erro ao iniciar fluxo de compra: " + e.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -447,8 +465,9 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
                           disabled={isSubmitting}
                           className="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg uppercase tracking-widest text-[10px] disabled:opacity-50"
                        >
-                          Confirmar Pedido de Peça
+                          Iniciar Fluxo de Compra
                        </button>
+                       <p className="text-[9px] text-blue-700 text-center font-bold">O pedido seguirá para cotação no módulo de Compras.</p>
                     </div>
                  )}
 

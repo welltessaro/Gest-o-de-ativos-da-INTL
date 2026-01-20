@@ -42,7 +42,8 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({ companies, assets, onAd
     c.costCenter?.includes(searchTerm)
   );
 
-  const getAssetCount = (departmentId: string) => assets.filter(a => a.departmentId === departmentId).length;
+  // Alterado para contar apenas ativos que NÃO estão baixados
+  const getAssetCount = (departmentId: string) => assets.filter(a => a.departmentId === departmentId && a.status !== 'Baixado').length;
 
   const handleEdit = (department: Department) => {
     setEditingCompany(department);

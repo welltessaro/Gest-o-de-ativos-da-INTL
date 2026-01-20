@@ -35,6 +35,9 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
 
   const today = new Date().toISOString().split('T')[0];
 
+  // Filtra apenas ativos que compõem a frota operacional (Ignora Baixados para contagens de "Total")
+  const activeAssets = useMemo(() => assets.filter(a => a.status !== 'Baixado'), [assets]);
+
   const todayDeliveries = useMemo(() => {
     const deliveries: any[] = [];
     requests.forEach(req => {
@@ -54,24 +57,27 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
   }, [requests, employees, today]);
 
   const stats = [
-    { id: 'total' as DetailType, label: 'Total Ativos', value: assets.length, icon: Layers, color: 'text-blue-700', bg: 'bg-blue-100' },
+    // Total agora usa activeAssets (exclui baixados)
+    { id: 'total' as DetailType, label: 'Ativos Operacionais', value: activeAssets.length, icon: Layers, color: 'text-blue-700', bg: 'bg-blue-100' },
     { id: 'in-use' as DetailType, label: 'Em Uso', value: assets.filter(a => a.status === 'Em Uso').length, icon: ShieldCheck, color: 'text-emerald-700', bg: 'bg-emerald-100' },
     { id: 'maintenance' as DetailType, label: 'Em Manutenção', value: assets.filter(a => a.status === 'Manutenção').length, icon: Activity, color: 'text-amber-700', bg: 'bg-amber-100' },
-    { id: 'retired' as DetailType, label: 'Baixados', value: assets.filter(a => a.status === 'Baixado').length, icon: AlertTriangle, color: 'text-rose-700', bg: 'bg-rose-100' },
+    // Mantemos a contagem total de baixados para histórico, mas ela não soma no card 'Total' acima
+    { id: 'retired' as DetailType, label: 'Baixados / Sucata', value: assets.filter(a => a.status === 'Baixado').length, icon: AlertTriangle, color: 'text-rose-700', bg: 'bg-rose-100' },
   ];
 
+  // Gráficos agora baseados na frota ativa
   const chartData = [
-    { name: 'Desktop', qty: assets.filter(a => a.type === 'Desktop').length },
-    { name: 'Notebook', qty: assets.filter(a => a.type === 'Notebook').length },
-    { name: 'Monitor', qty: assets.filter(a => a.type === 'Monitor').length },
-    { name: 'Outros', qty: assets.filter(a => !['Desktop', 'Notebook', 'Monitor'].includes(a.type)).length },
+    { name: 'Desktop', qty: activeAssets.filter(a => a.type === 'Desktop').length },
+    { name: 'Notebook', qty: activeAssets.filter(a => a.type === 'Notebook').length },
+    { name: 'Monitor', qty: activeAssets.filter(a => a.type === 'Monitor').length },
+    { name: 'Outros', qty: activeAssets.filter(a => !['Desktop', 'Notebook', 'Monitor'].includes(a.type)).length },
   ];
 
   const statusData = [
-    { name: 'Disponível', value: assets.filter(a => a.status === 'Disponível').length },
-    { name: 'Em Uso', value: assets.filter(a => a.status === 'Em Uso').length },
-    { name: 'Manutenção', value: assets.filter(a => a.status === 'Manutenção').length },
-    { name: 'Pendente Doc', value: assets.filter(a => a.status === 'Pendente Documentos').length },
+    { name: 'Disponível', value: activeAssets.filter(a => a.status === 'Disponível').length },
+    { name: 'Em Uso', value: activeAssets.filter(a => a.status === 'Em Uso').length },
+    { name: 'Manutenção', value: activeAssets.filter(a => a.status === 'Manutenção').length },
+    { name: 'Pendente Doc', value: activeAssets.filter(a => a.status === 'Pendente Documentos').length },
   ];
 
   const assetsGroupedByEmployee = useMemo(() => {
@@ -144,7 +150,7 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-8">Ativos por Categoria</h3>
+          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-8">Ativos por Categoria (Ativos)</h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
@@ -162,7 +168,7 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
         </div>
 
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-8">Status dos Ativos</h3>
+          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-8">Status Operacional</h3>
           <div className="h-72 flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -210,7 +216,7 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
                     </div>
                     <div>
                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-                          {selectedDetail === 'total' && 'Relatório de Ativos'}
+                          {selectedDetail === 'total' && 'Relatório de Ativos Operacionais'}
                           {selectedDetail === 'in-use' && 'Ativos Alocados'}
                           {selectedDetail === 'maintenance' && 'Centro de Manutenção'}
                           {selectedDetail === 'retired' && 'Arquivo de Baixas'}
