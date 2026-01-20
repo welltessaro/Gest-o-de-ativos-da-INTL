@@ -203,7 +203,7 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
       // Cria uma requisição padronizada para o fluxo de compras
       await onAddRequest({
         requesterId: currentUser.id,
-        employeeId: '', // Sem vínculo com funcionário específico, é peça de estoque/manutenção
+        employeeId: null, // Sem vínculo com funcionário específico, é peça de estoque/manutenção
         items: [poType],
         observation: `[MANUTENÇÃO] Aquisição de peça (${poType}) para reparo do ativo ${detailAsset.id}.\nDiagnóstico Atual: ${finalDiagnosis || detailAsset.observations}`,
         // ItemFulfillment com estrutura completa para entrar direto no fluxo de Cotação
@@ -218,17 +218,25 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
           ]
         }]
       });
+      
       setShowPOForm(false);
+      // Fecha a tela de manutenção automaticamente após iniciar o fluxo de compra com sucesso
+      setShowDetailModal(false);
+      setDetailAsset(null);
+      setFinalDiagnosis('');
+
       onAddNotification({
         title: 'Solicitação de Compra',
         message: `Pedido de compra iniciado para ${poType} (Ref: ${detailAsset.id}).`,
         type: 'info',
         targetModule: 'purchase-orders'
       });
-      alert("Fluxo de compra iniciado com sucesso!\nAcompanhe a cotação no módulo 'Pedidos de Compra'.");
+      alert("Fluxo de compra iniciado com sucesso!\nO modal de manutenção foi fechado. Acompanhe a cotação no módulo 'Pedidos de Compra'.");
     } catch (e: any) {
       console.error(e);
-      alert("Erro ao iniciar fluxo de compra: " + e.message);
+      // Proteção contra erro [object Object] se a exceção não tiver message
+      const errorMsg = e?.message || JSON.stringify(e) || "Erro desconhecido";
+      alert("Erro ao iniciar fluxo de compra: " + errorMsg);
     } finally {
       setIsSubmitting(false);
     }

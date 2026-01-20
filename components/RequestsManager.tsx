@@ -46,8 +46,8 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({
     observation: ''
   });
 
-  const getEmployee = (id: string) => employees.find(e => e.id === id);
-  const getEmployeeName = (id: string) => getEmployee(id)?.name || 'Desconhecido';
+  const getEmployee = (id?: string | null) => employees.find(e => e.id === id);
+  const getEmployeeName = (id?: string | null) => getEmployee(id)?.name || 'Desconhecido';
   
   const toggleItem = (type: AssetType) => {
     setNewReq(prev => ({
@@ -253,7 +253,7 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({
               <form onSubmit={handleSubmit} className="p-10 space-y-8 overflow-y-auto flex-1">
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Colaborador</label>
-                    <select className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold" value={newReq.employeeId} onChange={e => setNewReq({...newReq, employeeId: e.target.value})} required>
+                    <select className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold" value={newReq.employeeId || ''} onChange={e => setNewReq({...newReq, employeeId: e.target.value})} required>
                        <option value="">Selecione...</option>
                        {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                     </select>

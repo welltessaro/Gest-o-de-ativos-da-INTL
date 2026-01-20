@@ -127,7 +127,7 @@ export interface ItemFulfillment {
 export interface EquipmentRequest {
   id: string;
   requesterId: string;
-  employeeId: string;
+  employeeId?: string | null; // Alterado para permitir nulo/undefined
   items: AssetType[];
   itemFulfillments?: ItemFulfillment[];
   observation?: string;

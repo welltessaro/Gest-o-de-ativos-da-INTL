@@ -15,7 +15,6 @@ import {
   X,
   User,
   Archive,
-  ChevronRight,
   Info
 } from 'lucide-react';
 import { Asset, EquipmentRequest, Employee } from '../types';
@@ -57,15 +56,12 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
   }, [requests, employees, today]);
 
   const stats = [
-    // Total agora usa activeAssets (exclui baixados)
     { id: 'total' as DetailType, label: 'Ativos Operacionais', value: activeAssets.length, icon: Layers, color: 'text-blue-700', bg: 'bg-blue-100' },
     { id: 'in-use' as DetailType, label: 'Em Uso', value: assets.filter(a => a.status === 'Em Uso').length, icon: ShieldCheck, color: 'text-emerald-700', bg: 'bg-emerald-100' },
     { id: 'maintenance' as DetailType, label: 'Em Manutenção', value: assets.filter(a => a.status === 'Manutenção').length, icon: Activity, color: 'text-amber-700', bg: 'bg-amber-100' },
-    // Mantemos a contagem total de baixados para histórico, mas ela não soma no card 'Total' acima
     { id: 'retired' as DetailType, label: 'Baixados / Sucata', value: assets.filter(a => a.status === 'Baixado').length, icon: AlertTriangle, color: 'text-rose-700', bg: 'bg-rose-100' },
   ];
 
-  // Gráficos agora baseados na frota ativa
   const chartData = [
     { name: 'Desktop', qty: activeAssets.filter(a => a.type === 'Desktop').length },
     { name: 'Notebook', qty: activeAssets.filter(a => a.type === 'Notebook').length },
@@ -117,8 +113,8 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
                    <div key={i} className="bg-emerald-50 border border-emerald-200 px-4 py-3 rounded-2xl flex items-center gap-3">
                       <Package className="w-4 h-4 text-emerald-700" />
                       <div>
-                        <p className="text-[10px] font-black uppercase text-emerald-700 leading-none">{d.item}</p>
-                        <p className="text-xs font-bold text-slate-800">{d.employeeName}</p>
+                        <p className="text-[10px] font-black uppercase text-emerald-700 leading-none">{String(d.item || 'Item')}</p>
+                        <p className="text-xs font-bold text-slate-800">{String(d.employeeName || 'N/A')}</p>
                       </div>
                    </div>
                  ))}
@@ -265,8 +261,8 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
                                 <User className="w-6 h-6" />
                              </div>
                              <div>
-                                <h4 className="font-black text-slate-900">{group.employee?.name || 'Não Vinculado'}</h4>
-                                <p className="text-xs text-slate-600 font-black uppercase tracking-widest">{group.employee?.sector || 'Sem Setor'}</p>
+                                <h4 className="font-black text-slate-900">{String(group.employee?.name || 'Não Vinculado')}</h4>
+                                <p className="text-xs text-slate-600 font-black uppercase tracking-widest">{String(group.employee?.sector || 'Sem Setor')}</p>
                              </div>
                           </div>
                           <span className="bg-blue-700 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-100">
@@ -278,8 +274,8 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
                             <div key={asset.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center gap-3">
                                <Package className="w-5 h-5 text-slate-600" />
                                <div>
-                                  <p className="text-xs font-black text-slate-900 leading-none mb-1">{asset.type}</p>
-                                  <p className="text-[10px] text-slate-600 font-black uppercase">{asset.brand} {asset.model}</p>
+                                  <p className="text-xs font-black text-slate-900 leading-none mb-1">{String(asset.type)}</p>
+                                  <p className="text-[10px] text-slate-600 font-black uppercase">{String(asset.brand)} {String(asset.model)}</p>
                                   <p className="text-[9px] text-blue-700 font-mono font-bold mt-1">ID: {asset.id}</p>
                                </div>
                             </div>
@@ -299,15 +295,15 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
                               <Activity className="w-8 h-8" />
                            </div>
                            <div>
-                              <p className="font-black text-slate-900 text-lg">{asset.type}</p>
-                              <p className="text-sm text-slate-600 font-black uppercase tracking-widest leading-none mb-1">{asset.brand} {asset.model}</p>
+                              <p className="font-black text-slate-900 text-lg">{String(asset.type)}</p>
+                              <p className="text-sm text-slate-600 font-black uppercase tracking-widest leading-none mb-1">{String(asset.brand)} {String(asset.model)}</p>
                               <p className="text-[10px] font-mono font-bold text-slate-500">PATRIMÔNIO: {asset.id}</p>
                            </div>
                         </div>
                         <div className="flex-1 bg-amber-50/50 p-6 rounded-2xl border border-amber-200 relative">
                            <div className="absolute -top-3 left-4 bg-amber-700 text-white px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">Laudo Técnico / Motivo</div>
                            <p className="text-sm text-slate-800 font-semibold italic leading-relaxed">
-                             "{asset.observations || 'Nenhum motivo específico detalhado no cadastro de manutenção.'}"
+                             "{String(asset.observations || 'Nenhum motivo específico detalhado no cadastro de manutenção.')}"
                            </p>
                            <div className="mt-4 flex items-center gap-2 text-[10px] font-black uppercase text-amber-700 tracking-widest">
                              <User className="w-3 h-3" /> Responsável Anterior: {getEmployeeName(asset.assignedTo)}
@@ -334,16 +330,16 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees }) =>
                            </div>
                            <div>
                               <div className="flex items-center gap-3">
-                                <h4 className="text-lg font-black text-slate-900">{asset.type}</h4>
+                                <h4 className="text-lg font-black text-slate-900">{String(asset.type)}</h4>
                                 <span className="bg-rose-100 text-rose-700 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-rose-200">Baixado</span>
                               </div>
-                              <p className="text-sm text-slate-600 font-black uppercase tracking-tighter">{asset.brand} {asset.model} • {asset.id}</p>
+                              <p className="text-sm text-slate-600 font-black uppercase tracking-tighter">{String(asset.brand)} {String(asset.model)} • {asset.id}</p>
                            </div>
                         </div>
                         <div className="max-w-md text-right">
                            <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-1">Motivo da Baixa</p>
                            <p className="text-sm text-slate-800 font-semibold leading-tight">
-                             {asset.observations || 'Sucateamento técnico por obsolescência.'}
+                             {String(asset.observations || 'Sucateamento técnico por obsolescência.')}
                            </p>
                         </div>
                       </div>

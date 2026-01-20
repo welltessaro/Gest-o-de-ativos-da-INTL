@@ -99,7 +99,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
     return matchesSearch && matchesStatus;
   });
 
-  const getEmployeeName = (id: string) => employees.find(e => e.id === id)?.name || 'Estoque TI (Reposição)';
+  const getEmployeeName = (id?: string | null) => employees.find(e => e.id === id)?.name || 'Estoque TI (Reposição)';
 
   const handleUpdateQuotation = async (qIndex: number, field: keyof Quotation, value: any) => {
     if (!currentRequest || activeSelection === null) return;

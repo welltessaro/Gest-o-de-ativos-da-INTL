@@ -216,7 +216,15 @@ const App: React.FC = () => {
 
   const handleAddRequest = async (reqData: any): Promise<void> => {
     const id = `REQ-${Math.floor(Math.random() * 9000) + 1000}`;
-    const newReq: EquipmentRequest = { ...reqData, id, status: 'Pendente', createdAt: new Date().toISOString() };
+    
+    // CORREÇÃO CRÍTICA: Se employeeId for string vazia, converte para null.
+    // Isso evita o erro de chave estrangeira no banco de dados.
+    const sanitizedData = { ...reqData };
+    if (sanitizedData.employeeId === '') {
+      sanitizedData.employeeId = null;
+    }
+
+    const newReq: EquipmentRequest = { ...sanitizedData, id, status: 'Pendente', createdAt: new Date().toISOString() };
     await db.requests.upsert(newReq);
     setRequests(prev => [newReq, ...(prev || [])]);
   };
@@ -225,7 +233,7 @@ const App: React.FC = () => {
     await db.requests.upsert(req);
     setRequests(prev => (prev || []).map(r => r.id === req.id ? req : r));
 
-    if (req.status === 'Entregue') {
+    if (req.status === 'Entregue' && req.employeeId) {
       const employee = employees.find(e => e.id === req.employeeId);
       if (!employee) return;
 
