@@ -40,6 +40,7 @@ export interface AssetTypeConfig {
 
 export interface Asset {
   id: string;
+  tagId?: string; // Novo campo: Etiqueta patrimonial física
   serialNumber?: string;
   departmentId: string;
   type: AssetType;
@@ -117,7 +118,7 @@ export interface ItemFulfillment {
   type: AssetType;
   linkedAssetId?: string;
   isPurchaseOrder: boolean;
-  purchaseStatus?: 'Pendente' | 'Cotação Aprovada' | 'Pedido Autorizado' | 'Comprado';
+  purchaseStatus?: 'Pendente' | 'Cotação Aprovada' | 'Pedido Autorizado' | 'Comprado' | 'Reprovado';
   quotations?: Quotation[];
   approvedQuotationIndex?: number;
   deliveryForecastDate?: string;

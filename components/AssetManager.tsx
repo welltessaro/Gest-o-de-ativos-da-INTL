@@ -66,6 +66,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
 
   const [formData, setFormData] = useState<Partial<Asset>>({
     id: '',
+    tagId: '',
     type: 'Notebook',
     status: 'Disponível',
     brand: '',
@@ -92,6 +93,13 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
       setFormData(prev => ({ ...prev, departmentId: companies[0].id }));
     }
   }, [companies, showForm, editingAsset]);
+
+  // Sincronização automática: Se ID for preenchido manualmente, copia para tagId
+  useEffect(() => {
+    if (formData.id && formData.id.trim() !== '') {
+      setFormData(prev => ({ ...prev, tagId: prev.id }));
+    }
+  }, [formData.id]);
 
   const getDepartmentName = (id: string) => companies.find(c => c.id === id)?.name || 'N/A';
   const getEmployeeName = (id?: string) => employees.find(e => e.id === id)?.name || 'Em Estoque';
@@ -151,7 +159,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
 
   const resetFormData = () => {
     setFormData({ 
-      id: '', type: assetTypeConfigs[0]?.name || 'Notebook', status: 'Disponível', brand: '', model: '', serialNumber: '', 
+      id: '', tagId: '', type: assetTypeConfigs[0]?.name || 'Notebook', status: 'Disponível', brand: '', model: '', serialNumber: '', 
       observations: '', photos: [], departmentId: companies[0]?.id || '', assignedTo: '',
       ram: '', storage: '', processor: '', screenSize: '', caseModel: '',
       isWireless: false, monitorInputs: [], isAbnt: true, hasNumericKeypad: true, purchaseValue: 0
@@ -162,6 +170,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
   const filteredAssets = assets.filter(a => {
     const matchesSearch = 
       a.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (a.tagId?.toLowerCase().includes(searchTerm.toLowerCase())) ||
       a.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
       a.brand.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesVisibility = showRetired ? true : a.status !== 'Baixado';
@@ -175,7 +184,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 w-5 h-5" />
           <input 
             type="text" 
-            placeholder="Filtrar por ID, marca ou modelo..." 
+            placeholder="Filtrar por ID, Etiqueta, marca ou modelo..." 
             className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-600 outline-none transition-all shadow-sm font-semibold"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -207,7 +216,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
           <table className="w-full text-left border-collapse">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">ID / Serial</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">ID / Etiqueta</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Tipo / Classificação</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Marca/Modelo</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Responsável</th>
@@ -227,7 +236,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col">
                         <span className="font-black text-slate-900">{asset.id}</span>
-                        <span className="text-[9px] text-slate-400 font-mono">{asset.serialNumber || 'S/N'}</span>
+                        <span className="text-[10px] text-blue-600 font-bold uppercase tracking-tight">TAG: {asset.tagId || 'N/A'}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -300,13 +309,27 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
               <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div className="space-y-1.5">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ID Patrimonial</label>
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ID Patrimonial Principal (Vazio = Auto)</label>
                        <input 
                          className="w-full p-4 rounded-2xl border border-slate-200 bg-slate-50 font-mono font-bold outline-none focus:ring-2 focus:ring-blue-600" 
                          value={formData.id} 
                          onChange={e => setFormData({...formData, id: e.target.value})} 
                          placeholder="Ex: AST-001 (Opcional)"
                        />
+                    </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Etiqueta Patrimonial Física</label>
+                       <input 
+                         className="w-full p-4 rounded-2xl border border-slate-200 bg-white font-mono font-bold outline-none focus:ring-2 focus:ring-blue-600" 
+                         value={formData.tagId} 
+                         onChange={e => setFormData({...formData, tagId: e.target.value})} 
+                         placeholder="Ex: 05421"
+                         disabled={!!(formData.id && formData.id.trim() !== '')}
+                         title={!!(formData.id && formData.id.trim() !== '') ? "A etiqueta é copiada automaticamente do ID se preenchido manualmente." : ""}
+                       />
+                       {!!(formData.id && formData.id.trim() !== '') && (
+                         <p className="text-[9px] text-blue-600 font-bold uppercase tracking-tight ml-1 animate-pulse">Sincronizado com ID Principal</p>
+                       )}
                     </div>
                     <div className="space-y-1.5">
                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Ativo</label>
@@ -474,6 +497,13 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                     <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
                        <p className="text-[10px] font-black text-slate-400 uppercase mb-2">Departamento</p>
                        <p className="font-bold text-slate-800">{getDepartmentName(detailAsset.departmentId)}</p>
+                    </div>
+                    <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 col-span-1 md:col-span-2">
+                       <p className="text-[10px] font-black text-blue-400 uppercase mb-2 tracking-widest">Etiqueta Patrimonial Física</p>
+                       <div className="flex items-center gap-3">
+                          <ScanBarcode className="w-6 h-6 text-blue-600" />
+                          <p className="text-xl font-black text-blue-900 tracking-tight">{detailAsset.tagId || 'NÃO TAGUEADO'}</p>
+                       </div>
                     </div>
                  </div>
 

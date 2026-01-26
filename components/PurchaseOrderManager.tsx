@@ -24,7 +24,8 @@ import {
   ArrowRight,
   ExternalLink,
   Loader2,
-  Clock
+  Clock,
+  Ban
 } from 'lucide-react';
 import { EquipmentRequest, Employee, ItemFulfillment, Quotation, Asset, HistoryEntry, AssetType, AssetTypeConfig } from '../types';
 import { ASSET_TYPES } from '../constants';
@@ -135,6 +136,19 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
       purchaseStatus: 'Pedido Autorizado' 
     };
     await onUpdateRequest({ ...currentRequest, itemFulfillments: newFulfillments });
+  };
+
+  const handleDenyOrder = async () => {
+    if (!currentRequest || activeSelection === null) return;
+    if (!window.confirm("ATENÇÃO: Deseja realmente NEGAR e encerrar este pedido de compra?")) return;
+
+    const newFulfillments = [...(currentRequest.itemFulfillments || [])];
+    newFulfillments[activeSelection.fIndex] = { 
+      ...newFulfillments[activeSelection.fIndex], 
+      purchaseStatus: 'Reprovado' 
+    };
+    await onUpdateRequest({ ...currentRequest, itemFulfillments: newFulfillments });
+    setActiveSelection(null);
   };
 
   const handleSetComprado = async (requestId: string, fIndex: number) => {
@@ -295,7 +309,9 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                     <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
                       (item.fulfillment.purchaseStatus || 'Pendente') === 'Pendente' ? 'bg-amber-50 text-amber-600 border-amber-200' :
                       item.fulfillment.purchaseStatus === 'Cotação Aprovada' ? 'bg-blue-50 text-blue-600 border-blue-200' :
-                      item.fulfillment.purchaseStatus === 'Pedido Autorizado' ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                      item.fulfillment.purchaseStatus === 'Pedido Autorizado' ? 'bg-indigo-50 text-indigo-600 border-indigo-200' :
+                      item.fulfillment.purchaseStatus === 'Reprovado' ? 'bg-rose-50 text-rose-600 border-rose-200' : 
+                      'bg-emerald-50 text-emerald-600 border-emerald-200'
                     }`}>
                       {item.fulfillment.purchaseStatus || 'Pendente'}
                     </span>
@@ -420,12 +436,20 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                           <ExternalLink className="w-6 h-6" />
                         </a>
                      </div>
-                     <button 
-                      onClick={handleAuthorizeOrder}
-                      className="w-full bg-white text-blue-600 font-black py-5 rounded-[2rem] uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all"
-                     >
-                       <CheckSquare className="w-5 h-5" /> Autorizar Pedido
-                     </button>
+                     <div className="flex gap-4">
+                        <button 
+                          onClick={handleDenyOrder}
+                          className="flex-1 bg-white/20 text-white hover:bg-white hover:text-rose-600 font-black py-5 rounded-[2rem] uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all"
+                        >
+                          <Ban className="w-5 h-5" /> Negar Pedido
+                        </button>
+                        <button 
+                          onClick={handleAuthorizeOrder}
+                          className="flex-[2] bg-white text-blue-600 font-black py-5 rounded-[2rem] uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all"
+                        >
+                          <CheckSquare className="w-5 h-5" /> Autorizar Pedido
+                        </button>
+                     </div>
                   </div>
                 </div>
               )}
@@ -465,6 +489,20 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                      >
                         Registrar Recebimento
                      </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STATUS REPROVADO */}
+              {currentFulfillment.purchaseStatus === 'Reprovado' && (
+                <div className="space-y-6">
+                   <div className="flex items-center gap-2 text-rose-600">
+                    <Ban className="w-6 h-6" />
+                    <h4 className="text-sm font-black uppercase tracking-widest text-slate-800">Pedido Recusado</h4>
+                  </div>
+                  <div className="bg-rose-100 rounded-[2.5rem] p-10 text-rose-800 shadow-sm text-center border border-rose-200">
+                     <X className="w-16 h-16 mx-auto mb-6 opacity-50" />
+                     <p className="font-bold">Este pedido foi negado pela diretoria e encerrado.</p>
                   </div>
                 </div>
               )}

@@ -147,24 +147,31 @@ const App: React.FC = () => {
 
   const handleAddAsset = async (assetData: any) => {
     let finalId = assetData.id?.trim();
+    let finalTagId = assetData.tagId?.trim();
+
     if (!finalId) {
        const randomSuffix = Math.floor(1000 + Math.random() * 9000);
        finalId = `AST-${randomSuffix}`;
        while(assets.some(a => a.id === finalId)) {
          finalId = `AST-${Math.floor(1000 + Math.random() * 9000)}`;
        }
+       // Se ID for automático, mantemos a etiqueta manual se existir, senão pode ficar vazia
+    } else {
+       // Se ID for manual, copiamos o ID para a etiqueta conforme requisito
+       finalTagId = finalId;
     }
 
     const newAsset: Asset = { 
       ...assetData, 
       id: finalId, 
+      tagId: finalTagId,
       qrCode: `QR-${finalId}`,
       createdAt: new Date().toISOString(),
       history: assetData.history || [{
         id: Math.random().toString(),
         date: new Date().toISOString(),
         type: 'Criação',
-        description: `Patrimônio registrado no sistema (ID Automático: ${!assetData.id ? 'Sim' : 'Não'}).`,
+        description: `Patrimônio registrado no sistema (ID Automático: ${!assetData.id ? 'Sim' : 'Não'}). Etiqueta: ${finalTagId || 'N/A'}.`,
         performedBy: currentUser?.name || 'Sistema'
       }],
       observations: assetData.observations || ''

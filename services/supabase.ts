@@ -53,14 +53,14 @@ const fromB64 = (str: string): any => {
 
 const deflateAsset = (asset: Asset) => {
   const { 
-    serialNumber, ram, storage, processor, screenSize, 
-    caseModel, isWireless, monitorInputs, isAbnt, hasNumericKeypad, purchaseValue,
+    ram, storage, processor, screenSize, 
+    caseModel, isWireless, monitorInputs, isAbnt, hasNumericKeypad,
     ...dbReady 
   } = asset;
 
   const virtualFields = {
-    serialNumber, ram, storage, processor, screenSize, 
-    caseModel, isWireless, monitorInputs, isAbnt, hasNumericKeypad, purchaseValue
+    ram, storage, processor, screenSize, 
+    caseModel, isWireless, monitorInputs, isAbnt, hasNumericKeypad
   };
 
   const observations = dbReady.observations || '';
@@ -69,7 +69,8 @@ const deflateAsset = (asset: Asset) => {
   
   return {
     ...dbReady,
-    // Garante que se assignedTo for undefined/vazio, ele vá como null para o Postgres
+    tagId: dbReady.tagId || null,
+    purchaseValue: dbReady.purchaseValue || 0,
     assignedTo: dbReady.assignedTo || null,
     departmentId: dbReady.departmentId || null,
     observations: `${cleanObs}\n\n${DATA_MARKER}\n${encodedData}`
@@ -78,7 +79,12 @@ const deflateAsset = (asset: Asset) => {
 
 const inflateAsset = (dbAsset: any): Asset => {
   if (!dbAsset) return null as any;
-  const asset = { ...dbAsset, history: dbAsset.history || [] } as Asset;
+  const asset = { 
+    ...dbAsset, 
+    history: dbAsset.history || [],
+    tagId: dbAsset.tagId || dbAsset.id, // Fallback se tagId for nulo
+    purchaseValue: dbAsset.purchaseValue || 0
+  } as Asset;
   
   if (typeof dbAsset.observations === 'string' && dbAsset.observations.includes(DATA_MARKER)) {
     try {
@@ -96,21 +102,14 @@ const inflateAsset = (dbAsset: any): Asset => {
 const deflateUser = (user: UserAccount) => {
   const { employeeId, password, modules, sector, ...rest } = user;
   
-  const virtualFields = { 
-    employeeId: employeeId || null, 
-    password: password || 'admin', 
-    modules: modules || [] 
-  };
-  
-  const encodedData = toB64(virtualFields);
-  const currentSector = sector || '';
-  const cleanSector = currentSector.split(DATA_MARKER)[0].trim();
-  
+  // No mapeamento novo, mantemos o employeeId no nível raiz para o Postgres
   return {
     ...rest,
     username: (rest.username || '').toLowerCase().trim(),
-    password: virtualFields.password,
-    sector: `${cleanSector} ${DATA_MARKER}${encodedData}`
+    password: password || 'admin',
+    sector: sector || 'Geral',
+    modules: modules || [],
+    employeeId: employeeId || null
   };
 };
 
@@ -119,18 +118,20 @@ const inflateUser = (dbUser: any): UserAccount => {
   
   const user = { 
     ...dbUser, 
-    modules: dbUser.modules || [] 
+    modules: dbUser.modules || [],
+    employeeId: dbUser.employeeId || ""
   } as UserAccount;
   
+  // Limpeza de legado do DATA_MARKER se existir no campo sector
   if (typeof dbUser.sector === 'string' && dbUser.sector.includes(DATA_MARKER)) {
     try {
       const parts = dbUser.sector.split(DATA_MARKER);
       user.sector = parts[0].trim();
       const virtualFields = fromB64(parts[1].trim());
       if (virtualFields) {
-        user.employeeId = virtualFields.employeeId || "";
-        user.password = virtualFields.password || dbUser.password || 'admin';
-        user.modules = Array.isArray(virtualFields.modules) ? virtualFields.modules : [];
+        if (!user.employeeId) user.employeeId = virtualFields.employeeId || "";
+        if (!user.password) user.password = virtualFields.password || 'admin';
+        if (!user.modules || user.modules.length === 0) user.modules = virtualFields.modules || [];
       }
     } catch (e) {}
   }
@@ -234,12 +235,7 @@ export const db = {
         const { data, error } = await supabase.from('accounting_accounts').select('*').order('code', { ascending: true });
         if (error) throw error;
         return data as AccountingAccount[];
-      } catch (err: any) { 
-        if (err.code === 'PGRST204' || err.code === 'PGRST205') {
-          console.warn("Tabela accounting_accounts não encontrada no Supabase. Execute o SQL de inicialização.");
-        }
-        return []; 
-      }
+      } catch (err: any) { return []; }
     },
     upsert: async (account: AccountingAccount) => {
       const { error } = await supabase.from('accounting_accounts').upsert(account);
@@ -256,12 +252,7 @@ export const db = {
         const { data, error } = await supabase.from('accounting_classifications').select('*').order('code', { ascending: true });
         if (error) throw error;
         return data as AccountingClassification[];
-      } catch (err: any) { 
-        if (err.code === 'PGRST204' || err.code === 'PGRST205') {
-          console.warn("Tabela accounting_classifications não encontrada no Supabase. Execute o SQL de inicialização.");
-        }
-        return []; 
-      }
+      } catch (err: any) { return []; }
     },
     upsert: async (classification: AccountingClassification) => {
       const { error } = await supabase.from('accounting_classifications').upsert(classification);
@@ -278,12 +269,7 @@ export const db = {
         const { data, error } = await supabase.from('asset_type_configs').select('*').order('name', { ascending: true });
         if (error) throw error;
         return data as AssetTypeConfig[];
-      } catch (err: any) { 
-        if (err.code === 'PGRST204' || err.code === 'PGRST205') {
-          console.warn("Tabela asset_type_configs não encontrada no Supabase. Execute o SQL de inicialização.");
-        }
-        return []; 
-      }
+      } catch (err: any) { return []; }
     },
     upsert: async (config: AssetTypeConfig) => {
       const { error } = await supabase.from('asset_type_configs').upsert(config);
