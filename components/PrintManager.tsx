@@ -83,6 +83,7 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets }) => {
     const selectedAssets = assets.filter(a => selectedAssetIds.includes(a.id));
     
     // Geramos um documento HTML altamente estilizado que atua como o "PDF" das etiquetas
+    // NOTA: A tag script de fechamento foi escapada para evitar SyntaxError no navegador
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -150,7 +151,7 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets }) => {
             // Pequeno delay para garantir renderização antes do usuário decidir o que fazer
             console.log('Documento pronto para impressão ou salvamento em PDF');
           }
-        </script>
+        <\/script>
       </body>
       </html>
     `;

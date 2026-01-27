@@ -86,7 +86,8 @@ export type AppModule =
   | 'user-management' 
   | 'inventory-check'
   | 'maintenance'
-  | 'accounting';
+  | 'accounting'
+  | 'system-info';
 
 export interface UserAccount {
   id: string;

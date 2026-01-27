@@ -25,6 +25,7 @@ export const ALL_MODULES: { id: AppModule; label: string }[] = [
   { id: 'user-management', label: 'Gestão de Usuários' },
   { id: 'inventory-check', label: 'Check semestral' },
   { id: 'accounting', label: 'Classificação Contábil' },
+  { id: 'system-info', label: 'Informações do Sistema' },
 ];
 
 export const MOCK_USERS: UserAccount[] = [
@@ -33,7 +34,7 @@ export const MOCK_USERS: UserAccount[] = [
     name: 'Administrador Master', 
     username: 'admin', 
     sector: 'TI',
-    modules: ['dashboard', 'departments', 'assets', 'maintenance', 'employees', 'requests', 'purchase-orders', 'printing', 'user-management', 'inventory-check', 'accounting'] 
+    modules: ['dashboard', 'departments', 'assets', 'maintenance', 'employees', 'requests', 'purchase-orders', 'printing', 'user-management', 'inventory-check', 'accounting', 'system-info'] 
   },
   { 
     id: '2', 

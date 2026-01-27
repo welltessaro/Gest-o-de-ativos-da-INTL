@@ -11,6 +11,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_5GUfPGtwRSMJHjNqocwqwA_GUm6U0PE';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Sistema de Cache Local (Fallback Offline)
 const localDB = {
   save: (key: string, data: any) => localStorage.setItem(`assettrack_${key}`, JSON.stringify(data)),
   get: (key: string) => {
@@ -19,132 +20,7 @@ const localDB = {
   }
 };
 
-const DATA_MARKER = '--- [SISTEMA-DATA-V1] ---';
-
-const toB64 = (obj: any): string => {
-  try {
-    const str = JSON.stringify(obj);
-    const bytes = new TextEncoder().encode(str);
-    let binary = "";
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
-  } catch (e) {
-    console.error("Erro na codificação Base64:", e);
-    return "";
-  }
-};
-
-const fromB64 = (str: string): any => {
-  if (!str) return null;
-  try {
-    const binary = atob(str.trim());
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    const decoded = new TextDecoder().decode(bytes);
-    return JSON.parse(decoded);
-  } catch (e) {
-    return null;
-  }
-};
-
-const deflateAsset = (asset: Asset) => {
-  const { 
-    ram, storage, processor, screenSize, 
-    caseModel, isWireless, monitorInputs, isAbnt, hasNumericKeypad,
-    ...dbReady 
-  } = asset;
-
-  const virtualFields = {
-    ram, storage, processor, screenSize, 
-    caseModel, isWireless, monitorInputs, isAbnt, hasNumericKeypad
-  };
-
-  const observations = dbReady.observations || '';
-  const cleanObs = observations.split(DATA_MARKER)[0].trim();
-  const encodedData = toB64(virtualFields);
-  
-  return {
-    ...dbReady,
-    tagId: dbReady.tagId || null,
-    purchaseValue: dbReady.purchaseValue || 0,
-    assignedTo: dbReady.assignedTo || null,
-    departmentId: dbReady.departmentId || null,
-    observations: `${cleanObs}\n\n${DATA_MARKER}\n${encodedData}`
-  };
-};
-
-const inflateAsset = (dbAsset: any): Asset => {
-  if (!dbAsset) return null as any;
-  const asset = { 
-    ...dbAsset, 
-    history: dbAsset.history || [],
-    tagId: dbAsset.tagId || dbAsset.id, // Fallback se tagId for nulo
-    purchaseValue: dbAsset.purchaseValue || 0
-  } as Asset;
-  
-  if (typeof dbAsset.observations === 'string' && dbAsset.observations.includes(DATA_MARKER)) {
-    try {
-      const parts = dbAsset.observations.split(DATA_MARKER);
-      asset.observations = parts[0].trim();
-      const virtualFields = fromB64(parts[1].trim());
-      if (virtualFields) {
-        Object.assign(asset, virtualFields);
-      }
-    } catch (e) {}
-  }
-  return asset;
-};
-
-const deflateUser = (user: UserAccount) => {
-  const { employeeId, password, modules, sector, ...rest } = user;
-  
-  // No mapeamento novo, mantemos o employeeId no nível raiz para o Postgres
-  return {
-    ...rest,
-    username: (rest.username || '').toLowerCase().trim(),
-    password: password || 'admin',
-    sector: sector || 'Geral',
-    modules: modules || [],
-    employeeId: employeeId || null
-  };
-};
-
-const inflateUser = (dbUser: any): UserAccount => {
-  if (!dbUser) return null as any;
-  
-  const user = { 
-    ...dbUser, 
-    modules: dbUser.modules || [],
-    employeeId: dbUser.employeeId || ""
-  } as UserAccount;
-  
-  // Limpeza de legado do DATA_MARKER se existir no campo sector
-  if (typeof dbUser.sector === 'string' && dbUser.sector.includes(DATA_MARKER)) {
-    try {
-      const parts = dbUser.sector.split(DATA_MARKER);
-      user.sector = parts[0].trim();
-      const virtualFields = fromB64(parts[1].trim());
-      if (virtualFields) {
-        if (!user.employeeId) user.employeeId = virtualFields.employeeId || "";
-        if (!user.password) user.password = virtualFields.password || 'admin';
-        if (!user.modules || user.modules.length === 0) user.modules = virtualFields.modules || [];
-      }
-    } catch (e) {}
-  }
-
-  if (user.username === 'admin' && (!user.modules || user.modules.length === 0)) {
-    user.modules = [
-      'dashboard', 'departments', 'assets', 'maintenance', 'employees', 
-      'requests', 'purchase-orders', 'printing', 'user-management', 'inventory-check', 'accounting'
-    ];
-  }
-
-  return user;
-};
+// --- MÉTODOS DE ACESSO LIMPOS ---
 
 export const db = {
   assets: {
@@ -152,16 +28,36 @@ export const db = {
       try {
         const { data, error } = await supabase.from('assets').select('*').order('createdAt', { ascending: false });
         if (error) throw error;
-        const inflated = (data || []).map(inflateAsset);
-        localDB.save('assets', inflated);
-        return inflated;
+        
+        // Normalização e Proteção contra Nulls
+        const assets = (data || []).map((a: any) => ({
+          ...a,
+          purchaseValue: Number(a.purchaseValue) || 0,
+          tagId: a.tagId || a.id,
+          photos: a.photos || [],
+          monitorInputs: a.monitorInputs || [],
+          history: a.history || []
+        })) as Asset[];
+
+        localDB.save('assets', assets);
+        return assets;
       } catch (err) {
+        console.warn("Supabase offline/erro, usando cache local para ativos.");
         return localDB.get('assets') || [];
       }
     },
     upsert: async (asset: Asset) => {
-      const dbReady = deflateAsset(asset);
-      const { error } = await supabase.from('assets').upsert(dbReady);
+      const payload = {
+        ...asset,
+        purchaseValue: asset.purchaseValue ?? 0,
+        assignedTo: asset.assignedTo || null,
+        departmentId: asset.departmentId || null,
+        tagId: asset.tagId || null,
+        photos: asset.photos || [],
+        history: asset.history || []
+      };
+      
+      const { error } = await supabase.from('assets').upsert(payload);
       if (error) throw error;
     },
     remove: async (id: string) => {
@@ -169,13 +65,14 @@ export const db = {
       if (error) throw error;
     }
   },
+
   departments: {
     list: async () => {
       try {
         const { data, error } = await supabase.from('departments').select('*');
         if (error) throw error;
         localDB.save('departments', data);
-        return data as Department[];
+        return (data || []) as Department[];
       } catch (err) {
         return localDB.get('departments') || [];
       }
@@ -189,19 +86,24 @@ export const db = {
       if (error) throw error;
     }
   },
+
   employees: {
     list: async () => {
       try {
         const { data, error } = await supabase.from('employees').select('*');
         if (error) throw error;
         localDB.save('employees', data);
-        return data as Employee[];
+        return (data || []) as Employee[];
       } catch (err) {
         return localDB.get('employees') || [];
       }
     },
     upsert: async (emp: Employee) => {
-      const { error } = await supabase.from('employees').upsert(emp);
+      const payload = {
+        ...emp,
+        departmentId: emp.departmentId || null
+      };
+      const { error } = await supabase.from('employees').upsert(payload);
       if (error) throw error;
     },
     remove: async (id: string) => {
@@ -209,19 +111,33 @@ export const db = {
       if (error) throw error;
     }
   },
+
   requests: {
     list: async () => {
       try {
         const { data, error } = await supabase.from('requests').select('*').order('createdAt', { ascending: false });
         if (error) throw error;
-        localDB.save('requests', data);
-        return data as EquipmentRequest[];
+        
+        const requests = (data || []).map((r: any) => ({
+           ...r,
+           items: r.items || [],
+           itemFulfillments: r.itemFulfillments || []
+        })) as EquipmentRequest[];
+        
+        localDB.save('requests', requests);
+        return requests;
       } catch (err) {
         return localDB.get('requests') || [];
       }
     },
     upsert: async (req: EquipmentRequest) => {
-      const { error } = await supabase.from('requests').upsert(req);
+      const payload = {
+        ...req,
+        employeeId: req.employeeId || null,
+        items: req.items || [],
+        itemFulfillments: req.itemFulfillments || []
+      };
+      const { error } = await supabase.from('requests').upsert(payload);
       if (error) throw error;
     },
     remove: async (id: string) => {
@@ -229,12 +145,60 @@ export const db = {
       if (error) throw error;
     }
   },
+
+  users: {
+    list: async () => {
+      try {
+        const { data, error } = await supabase.from('users').select('*');
+        if (error) throw error;
+        
+        return (data || []).map((u: any) => ({
+            ...u,
+            modules: u.modules || []
+        })) as UserAccount[];
+      } catch (err) { return []; }
+    },
+    getForAuth: async (username: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('username', username.toLowerCase().trim())
+          .single();
+        if (error) throw error;
+        
+        if (data) {
+           data.modules = data.modules || [];
+        }
+        
+        return data as UserAccount;
+      } catch (err: any) { return null; }
+    },
+    upsert: async (user: UserAccount) => {
+      // Garante que o username seja minúsculo e sem espaços
+      const payload = {
+        ...user,
+        username: user.username.toLowerCase().trim(),
+        employeeId: user.employeeId || null,
+        modules: user.modules || []
+      };
+      const { error } = await supabase.from('users').upsert(payload);
+      if (error) throw error;
+    },
+    remove: async (id: string) => {
+      const { error } = await supabase.from('users').delete().eq('id', id);
+      if (error) throw error;
+    }
+  },
+
+  // --- MÓDULOS SECUNDÁRIOS E CONFIGURAÇÕES ---
+
   accountingAccounts: {
     list: async () => {
       try {
         const { data, error } = await supabase.from('accounting_accounts').select('*').order('code', { ascending: true });
         if (error) throw error;
-        return data as AccountingAccount[];
+        return (data || []) as AccountingAccount[];
       } catch (err: any) { return []; }
     },
     upsert: async (account: AccountingAccount) => {
@@ -246,12 +210,13 @@ export const db = {
       if (error) throw error;
     }
   },
+
   accountingClassifications: {
     list: async () => {
       try {
         const { data, error } = await supabase.from('accounting_classifications').select('*').order('code', { ascending: true });
         if (error) throw error;
-        return data as AccountingClassification[];
+        return (data || []) as AccountingClassification[];
       } catch (err: any) { return []; }
     },
     upsert: async (classification: AccountingClassification) => {
@@ -263,12 +228,13 @@ export const db = {
       if (error) throw error;
     }
   },
+
   assetTypeConfigs: {
     list: async () => {
       try {
         const { data, error } = await supabase.from('asset_type_configs').select('*').order('name', { ascending: true });
         if (error) throw error;
-        return data as AssetTypeConfig[];
+        return (data || []) as AssetTypeConfig[];
       } catch (err: any) { return []; }
     },
     upsert: async (config: AssetTypeConfig) => {
@@ -280,12 +246,13 @@ export const db = {
       if (error) throw error;
     }
   },
+
   notifications: {
     list: async () => {
       try {
         const { data, error } = await supabase.from('notifications').select('*').order('createdAt', { ascending: false }).limit(50);
         if (error) throw error;
-        return data as AppNotification[];
+        return (data || []) as AppNotification[];
       } catch (err) { return []; }
     },
     upsert: async (notif: AppNotification) => {
@@ -301,49 +268,29 @@ export const db = {
       if (error) throw error;
     }
   },
+
   auditSessions: {
     list: async () => {
       try {
         const { data, error } = await supabase.from('audit_sessions').select('*').order('createdAt', { ascending: false });
         if (error) throw error;
-        return data as AuditSession[];
+        
+        return (data || []).map((s: any) => ({
+           ...s,
+           entries: s.entries || []
+        })) as AuditSession[];
       } catch (err) { return []; }
     },
     upsert: async (session: AuditSession) => {
-      const { error } = await supabase.from('audit_sessions').upsert(session);
+      const payload = {
+         ...session,
+         entries: session.entries || []
+      };
+      const { error } = await supabase.from('audit_sessions').upsert(payload);
       if (error) throw error;
     },
     remove: async (id: string) => {
       const { error } = await supabase.from('audit_sessions').delete().eq('id', id);
-      if (error) throw error;
-    }
-  },
-  users: {
-    list: async () => {
-      try {
-        const { data, error } = await supabase.from('users').select('*');
-        if (error) throw error;
-        return (data || []).map(inflateUser);
-      } catch (err) { return []; }
-    },
-    getForAuth: async (username: string) => {
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('username', username.toLowerCase().trim())
-          .single();
-        if (error) throw error;
-        return inflateUser(data);
-      } catch (err: any) { return null; }
-    },
-    upsert: async (user: UserAccount) => {
-      const dbReady = deflateUser(user);
-      const { error } = await supabase.from('users').upsert(dbReady);
-      if (error) throw error;
-    },
-    remove: async (id: string) => {
-      const { error } = await supabase.from('users').delete().eq('id', id);
       if (error) throw error;
     }
   }

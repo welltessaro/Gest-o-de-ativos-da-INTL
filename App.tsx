@@ -12,12 +12,13 @@ import PrintManager from './components/PrintManager';
 import UserManager from './components/UserManager';
 import InventoryCheckManager from './components/InventoryCheckManager';
 import AccountingManager from './components/AccountingManager';
+import SystemInfoManager from './components/SystemInfoManager';
 import Auth from './components/Auth';
 import { MOCK_USERS } from './constants';
 import { 
   Asset, Employee, EquipmentRequest, UserAccount, 
   Department, AuditSession, AppNotification, AccountingAccount, 
-  AccountingClassification, AssetTypeConfig 
+  AccountingClassification, AssetTypeConfig, HistoryEntry 
 } from './types';
 import { db, supabase } from './services/supabase';
 import { Loader2, Package, WifiOff } from 'lucide-react';
@@ -155,27 +156,65 @@ const App: React.FC = () => {
        while(assets.some(a => a.id === finalId)) {
          finalId = `AST-${Math.floor(1000 + Math.random() * 9000)}`;
        }
-       // Se ID for automático, mantemos a etiqueta manual se existir, senão pode ficar vazia
     } else {
-       // Se ID for manual, copiamos o ID para a etiqueta conforme requisito
        finalTagId = finalId;
+    }
+
+    // LÓGICA DE CORREÇÃO DE VÍNCULO NO CADASTRO
+    // 1. Normaliza o assignedTo (garante que string vazia seja undefined)
+    const assignedTo = assetData.assignedTo && assetData.assignedTo.trim() !== '' ? assetData.assignedTo : undefined;
+    
+    // 2. Define o status inicial baseado se tem dono ou não
+    const initialStatus = assignedTo ? 'Em Uso' : 'Disponível';
+
+    // 3. Constrói o histórico inicial
+    const initialHistory: HistoryEntry[] = assetData.history || [];
+    
+    // Adiciona evento de criação
+    if (initialHistory.length === 0) {
+      initialHistory.push({
+        id: `HIST-CREATE-${Date.now()}`,
+        date: new Date().toISOString(),
+        type: 'Criação',
+        description: `Patrimônio registrado no sistema (ID: ${finalId}). Etiqueta: ${finalTagId || 'N/A'}.`,
+        performedBy: currentUser?.name || 'Sistema'
+      });
+    }
+
+    // Se já nasceu com dono, adiciona evento de atribuição
+    if (assignedTo) {
+      const empName = employees.find(e => e.id === assignedTo)?.name || 'Colaborador';
+      initialHistory.push({
+        id: `HIST-INIT-ASSIGN-${Date.now()}`,
+        date: new Date().toISOString(),
+        type: 'Atribuição',
+        description: `Ativo vinculado a ${empName} no momento do cadastro.`,
+        performedBy: currentUser?.name || 'Sistema'
+      });
+    }
+
+    // 4. Se tiver dono, tenta pegar o departamento do dono automaticamente
+    let departmentId = assetData.departmentId;
+    if (assignedTo) {
+       const emp = employees.find(e => e.id === assignedTo);
+       if (emp && emp.departmentId) {
+          departmentId = emp.departmentId;
+       }
     }
 
     const newAsset: Asset = { 
       ...assetData, 
       id: finalId, 
       tagId: finalTagId,
+      assignedTo: assignedTo, // Usa o valor normalizado
+      status: initialStatus,  // Usa o status calculado
+      departmentId: departmentId,
       qrCode: `QR-${finalId}`,
       createdAt: new Date().toISOString(),
-      history: assetData.history || [{
-        id: Math.random().toString(),
-        date: new Date().toISOString(),
-        type: 'Criação',
-        description: `Patrimônio registrado no sistema (ID Automático: ${!assetData.id ? 'Sim' : 'Não'}). Etiqueta: ${finalTagId || 'N/A'}.`,
-        performedBy: currentUser?.name || 'Sistema'
-      }],
+      history: initialHistory,
       observations: assetData.observations || ''
     };
+    
     await db.assets.upsert(newAsset);
     setAssets(prev => [newAsset, ...(prev || [])]);
   };
@@ -184,27 +223,55 @@ const App: React.FC = () => {
     const oldAsset = assets.find(a => a.id === updated.id);
     let finalAsset = { ...updated };
 
-    // LÓGICA DE PROTEÇÃO DE STATUS CRÍTICO
-    if (finalAsset.status === 'Baixado') {
-      // Se for baixa, limpa obrigatoriamente vínculos para evitar erros de integridade e inconsistência visual
+    // Normaliza assignedTo: string vazia vira undefined para comparação consistente
+    if (finalAsset.assignedTo === '') {
       finalAsset.assignedTo = undefined;
-      // Mantemos o departmentId apenas se for necessário para histórico de custos, 
-      // mas geralmente ativos baixados saem do centro de custo.
+    }
+
+    const oldAssigned = oldAsset?.assignedTo || undefined;
+    const newAssigned = finalAsset.assignedTo || undefined;
+
+    // --- LÓGICA DE DETECÇÃO DE MUDANÇA DE RESPONSÁVEL ---
+    // Detecta mudança real entre undefined e IDs válidos
+    if (oldAsset && oldAssigned !== newAssigned) {
+       const newEmp = employees.find(e => e.id === newAssigned);
+       const oldEmp = employees.find(e => e.id === oldAssigned);
+
+       const historyEntry: HistoryEntry = {
+          id: `HIST-MOV-${Date.now()}`,
+          date: new Date().toISOString(),
+          type: 'Atribuição',
+          description: newAssigned 
+            ? `Movimentação Manual: Transferido de ${oldEmp?.name || 'Estoque/Outro'} para ${newEmp?.name}`
+            : `Devolução Manual: Removido de ${oldEmp?.name} para Estoque.`,
+          performedBy: currentUser?.name || 'Sistema'
+       };
+
+       // Adiciona ao histórico existente
+       finalAsset.history = [...(finalAsset.history || []), historyEntry];
+
+       // Se atribuído a alguém, atualiza o departamento do ativo para o do funcionário
+       if (newEmp && newEmp.departmentId) {
+          finalAsset.departmentId = newEmp.departmentId;
+       }
+    }
+
+    // --- LÓGICA DE STATUS ---
+    if (finalAsset.status === 'Baixado') {
+      finalAsset.assignedTo = undefined;
     } else if (finalAsset.status === 'Manutenção') {
-      // Se estiver em manutenção, mantemos o status manual vindo do componente
+       // Mantém como está
     } else {
-      // Lógica automática para outros estados
+      // Automático: Se tem dono, é 'Em Uso'. Se não tem, é 'Disponível'.
       if (finalAsset.assignedTo) {
         finalAsset.status = 'Em Uso';
-        const emp = employees.find(e => e.id === finalAsset.assignedTo);
-        if (emp) finalAsset.departmentId = emp.departmentId;
-      } else if (finalAsset.status === 'Em Uso' || (oldAsset?.assignedTo && !finalAsset.assignedTo)) {
+      } else {
         finalAsset.status = 'Disponível';
       }
     }
 
     try {
-      console.log(`[AssetUpdate] Persistindo ${finalAsset.id} com status ${finalAsset.status}`);
+      console.log(`[AssetUpdate] Persistindo ${finalAsset.id} | Status: ${finalAsset.status} | Resp: ${finalAsset.assignedTo}`);
       await db.assets.upsert(finalAsset);
       setAssets(prev => {
         const next = (prev || []).map(a => a.id === finalAsset.id ? { ...finalAsset } : a);
@@ -221,11 +288,60 @@ const App: React.FC = () => {
     setAssets(prev => (prev || []).filter(a => a.id !== id));
   };
 
+  // --- LÓGICA DE INATIVAÇÃO DE COLABORADOR E DESVINCULAÇÃO ---
+  const handleRemoveEmployee = async (id: string) => {
+    const target = employees.find(e => e.id === id);
+    if (!target) return;
+
+    // 1. Inativar Colaborador
+    const updatedEmployee = { ...target, isActive: false };
+    await db.employees.upsert(updatedEmployee);
+    setEmployees(prev => prev.map(e => e.id === id ? updatedEmployee : e));
+
+    // 2. Localizar Ativos Vinculados
+    const linkedAssets = assets.filter(a => a.assignedTo === id);
+
+    // 3. Desvincular Ativos e Retornar ao Estoque
+    if (linkedAssets.length > 0) {
+      const updatedAssets: Asset[] = [];
+
+      for (const asset of linkedAssets) {
+        const newHistoryEntry: HistoryEntry = {
+          id: Math.random().toString(),
+          date: new Date().toISOString(),
+          type: 'Status',
+          description: `Devolução Automática: Colaborador ${target.name} foi inativado.`,
+          performedBy: currentUser?.name || 'Sistema'
+        };
+
+        const updatedAsset: Asset = {
+          ...asset,
+          assignedTo: undefined, // Remove o vínculo
+          status: 'Disponível', // Retorna para estoque/disponível
+          history: [...(asset.history || []), newHistoryEntry]
+        };
+
+        await db.assets.upsert(updatedAsset);
+        updatedAssets.push(updatedAsset);
+      }
+
+      // Atualiza estado local dos ativos
+      setAssets(prev => prev.map(a => {
+        const updated = updatedAssets.find(u => u.id === a.id);
+        return updated || a;
+      }));
+
+      addNotification({
+        title: 'Colaborador Inativado',
+        message: `${target.name} foi inativado. ${updatedAssets.length} ativos foram desvinculados e estão disponíveis.`,
+        type: 'info',
+        targetModule: 'assets'
+      });
+    }
+  };
+
   const handleAddRequest = async (reqData: any): Promise<void> => {
     const id = `REQ-${Math.floor(Math.random() * 9000) + 1000}`;
-    
-    // CORREÇÃO CRÍTICA: Se employeeId for string vazia, converte para null.
-    // Isso evita o erro de chave estrangeira no banco de dados.
     const sanitizedData = { ...reqData };
     if (sanitizedData.employeeId === '') {
       sanitizedData.employeeId = null;
@@ -341,7 +457,15 @@ const App: React.FC = () => {
         if (!isAuthenticated || !currentUser) return <Auth onLogin={handleLogin} users={users} />;
 
         switch (activeTab) {
-          case 'dashboard': return <Dashboard assets={assets} requests={requests} employees={activeEmployees} />;
+          case 'dashboard': 
+            return <Dashboard 
+              assets={assets} 
+              requests={requests} 
+              employees={employees} // Passamos todos para resolver nomes, o filtro é interno
+              departments={departments} // Passamos departamentos para exportação
+              assetTypeConfigs={assetTypeConfigs}
+              classifications={accountingClassifications}
+            />;
           case 'departments': 
             return <CompanyManager 
               companies={departments} assets={assets} 
@@ -363,15 +487,7 @@ const App: React.FC = () => {
                 setEmployees(prev => [...prev, newE]); 
               }} 
               onUpdate={async (u) => { await db.employees.upsert(u); setEmployees(prev => prev.map(e => e.id === u.id ? u : e)); }}
-              onRemove={async (id) => { 
-                setEmployees(prev => {
-                  const target = prev.find(e => e.id === id);
-                  if (!target) return prev;
-                  const updatedEmployee = { ...target, isActive: false };
-                  db.employees.upsert(updatedEmployee);
-                  return prev.map(e => e.id === id ? updatedEmployee : e);
-                });
-              }}
+              onRemove={handleRemoveEmployee} // Usa a nova lógica de desvinculação
             />;
           case 'requests': 
             return <RequestsManager 
@@ -437,6 +553,13 @@ const App: React.FC = () => {
               onAddAssetType={async (t) => { const newT = {...t, id: `TYPE-${Date.now()}`}; await db.assetTypeConfigs.upsert(newT); setAssetTypeConfigs(prev => [...prev, newT]); }}
               onUpdateAssetType={async (t) => { await db.assetTypeConfigs.upsert(t); setAssetTypeConfigs(prev => prev.map(old => old.id === t.id ? t : old)); }}
               onRemoveAssetType={async (id) => { await db.assetTypeConfigs.remove(id); setAssetTypeConfigs(prev => prev.filter(t => t.id !== id)); }}
+            />;
+          case 'system-info':
+            return <SystemInfoManager 
+              assets={assets} 
+              requests={requests} 
+              employees={employees} 
+              departments={departments} 
             />;
           default: return <div className="p-20 text-center text-slate-400 font-black uppercase tracking-widest text-xs">Módulo em Desenvolvimento</div>;
         }

@@ -63,8 +63,9 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
     brand: '',
     model: '',
     id: '',
+    serialNumber: '',
     observations: '',
-    purchaseValue: 0
+    purchaseValue: undefined // Alterado para undefined (opcional)
   });
 
   const currentRequest = useMemo(() => {
@@ -175,9 +176,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
       brand: '',
       model: '',
       id: '',
+      serialNumber: '',
       observations: `Item recebido via Pedido de Compra referente à requisição ${currentRequest?.id}`,
       type: currentFulfillment.type,
-      purchaseValue: priceFromQuotation
+      purchaseValue: priceFromQuotation // Sugere o valor da cotação, mas agora será editável
     });
     setShowReceiptForm(true);
   };
@@ -192,6 +194,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
         id: receiptData.id || undefined,
         brand: receiptData.brand || '',
         model: receiptData.model || '',
+        serialNumber: receiptData.serialNumber || '',
         type: currentFulfillment.type,
         departmentId: 'DEPT-1',
         status: currentRequest.employeeId ? 'Em Uso' : 'Disponível',
@@ -584,12 +587,30 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                     </div>
                  </div>
                  
-                 {receiptData.purchaseValue && receiptData.purchaseValue > 0 ? (
-                    <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between">
-                       <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Valor de Aquisição</span>
-                       <span className="text-lg font-black text-emerald-700">R$ {receiptData.purchaseValue.toLocaleString('pt-BR')}</span>
-                    </div>
-                 ) : null}
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número de Série (S/N)</label>
+                    <input 
+                      className="w-full p-4 rounded-2xl border border-slate-200 bg-white font-bold outline-none focus:ring-2 focus:ring-emerald-600"
+                      value={receiptData.serialNumber}
+                      onChange={e => setReceiptData({...receiptData, serialNumber: e.target.value})}
+                      placeholder="S/N do Fabricante"
+                    />
+                 </div>
+
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor de Aquisição (R$)</label>
+                    <input 
+                      type="number"
+                      step="0.01"
+                      className="w-full p-4 rounded-2xl border border-slate-200 bg-emerald-50/30 font-bold outline-none focus:ring-2 focus:ring-emerald-600"
+                      value={receiptData.purchaseValue ?? ''}
+                      onChange={e => {
+                        const val = parseFloat(e.target.value);
+                        setReceiptData({...receiptData, purchaseValue: isNaN(val) ? undefined : val})
+                      }}
+                      placeholder="0,00"
+                    />
+                 </div>
 
                  <button type="submit" disabled={isSubmitting} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-5 rounded-[2rem] shadow-xl uppercase tracking-widest text-xs">
                     {isSubmitting ? 'Salvando...' : 'Concluir e Registrar Ativo'}

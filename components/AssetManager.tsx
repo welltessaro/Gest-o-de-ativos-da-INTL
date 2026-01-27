@@ -39,7 +39,8 @@ import {
   Eye,
   EyeOff,
   Book,
-  DollarSign
+  DollarSign,
+  Barcode
 } from 'lucide-react';
 import { Asset, AssetType, Employee, Department, HistoryEntry, AssetStatus, AssetTypeConfig, AccountingClassification } from '../types';
 
@@ -85,7 +86,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
     monitorInputs: [],
     isAbnt: true,
     hasNumericKeypad: true,
-    purchaseValue: 0
+    purchaseValue: undefined 
   });
 
   useEffect(() => {
@@ -134,7 +135,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
 
   const openEditModal = (asset: Asset) => {
     setEditingAsset(asset);
-    setFormData({ ...asset });
+    setFormData({ ...asset, assignedTo: asset.assignedTo || '' }); // Garante que assignedTo nunca seja undefined
     setShowForm(true);
     setDetailAsset(null);
   };
@@ -162,7 +163,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
       id: '', tagId: '', type: assetTypeConfigs[0]?.name || 'Notebook', status: 'Disponível', brand: '', model: '', serialNumber: '', 
       observations: '', photos: [], departmentId: companies[0]?.id || '', assignedTo: '',
       ram: '', storage: '', processor: '', screenSize: '', caseModel: '',
-      isWireless: false, monitorInputs: [], isAbnt: true, hasNumericKeypad: true, purchaseValue: 0
+      isWireless: false, monitorInputs: [], isAbnt: true, hasNumericKeypad: true, purchaseValue: undefined
     });
     setEditingAsset(null);
   };
@@ -172,7 +173,9 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
       a.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
       (a.tagId?.toLowerCase().includes(searchTerm.toLowerCase())) ||
       a.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.brand.toLowerCase().includes(searchTerm.toLowerCase());
+      a.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (a.serialNumber && a.serialNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      getEmployeeName(a.assignedTo).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesVisibility = showRetired ? true : a.status !== 'Baixado';
     return matchesSearch && matchesVisibility;
   });
@@ -184,7 +187,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 w-5 h-5" />
           <input 
             type="text" 
-            placeholder="Filtrar por ID, Etiqueta, marca ou modelo..." 
+            placeholder="Filtrar por ID, S/N, marca ou modelo..." 
             className="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-600 outline-none transition-all shadow-sm font-semibold"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -217,7 +220,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">ID / Etiqueta</th>
-                <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Tipo / Classificação</th>
+                <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Tipo / S/N</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Marca/Modelo</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Responsável</th>
                 <th className="px-6 py-4 text-xs font-black text-slate-900 uppercase tracking-widest">Status</th>
@@ -242,12 +245,14 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col">
                         <span className="text-xs font-bold text-slate-800">{asset.type}</span>
-                        {classification && (
+                        {asset.serialNumber ? (
+                          <span className="text-[9px] font-mono text-slate-500 uppercase tracking-tighter">SN: {asset.serialNumber}</span>
+                        ) : classification ? (
                           <div className="flex items-center gap-1 mt-1">
                             <Book className="w-2.5 h-2.5 text-blue-500" />
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{classification.name}</span>
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -287,7 +292,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 flex flex-col max-h-[90vh]">
            <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
               <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                  <div className="flex items-center gap-4">
@@ -346,7 +351,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Responsável Atual</label>
                        <select 
                          className="w-full p-4 rounded-2xl border border-slate-200 bg-white font-bold outline-none focus:ring-2 focus:ring-blue-600"
-                         value={formData.assignedTo}
+                         value={formData.assignedTo || ''}
                          onChange={e => setFormData({...formData, assignedTo: e.target.value})}
                        >
                          <option value="">Disponível (Em Estoque)</option>
@@ -374,13 +379,25 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                        />
                     </div>
                     <div className="space-y-1.5">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número de Série (S/N)</label>
+                       <input 
+                         className="w-full p-4 rounded-2xl border border-slate-200 bg-white font-bold outline-none focus:ring-2 focus:ring-blue-600"
+                         value={formData.serialNumber}
+                         onChange={e => setFormData({...formData, serialNumber: e.target.value})}
+                         placeholder="S/N do Fabricante"
+                       />
+                    </div>
+                    <div className="space-y-1.5">
                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor de Aquisição (R$)</label>
                        <input 
                          type="number"
                          step="0.01"
                          className="w-full p-4 rounded-2xl border border-slate-200 bg-emerald-50/30 font-bold outline-none focus:ring-2 focus:ring-emerald-600"
-                         value={formData.purchaseValue}
-                         onChange={e => setFormData({...formData, purchaseValue: parseFloat(e.target.value)})}
+                         value={formData.purchaseValue ?? ''}
+                         onChange={e => {
+                           const val = parseFloat(e.target.value);
+                           setFormData({...formData, purchaseValue: isNaN(val) ? undefined : val})
+                         }}
                          placeholder="0,00"
                        />
                     </div>
@@ -500,9 +517,17 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                     </div>
                     <div className="bg-blue-50 p-6 rounded-3xl border border-blue-100 col-span-1 md:col-span-2">
                        <p className="text-[10px] font-black text-blue-400 uppercase mb-2 tracking-widest">Etiqueta Patrimonial Física</p>
-                       <div className="flex items-center gap-3">
-                          <ScanBarcode className="w-6 h-6 text-blue-600" />
-                          <p className="text-xl font-black text-blue-900 tracking-tight">{detailAsset.tagId || 'NÃO TAGUEADO'}</p>
+                       <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                              <ScanBarcode className="w-6 h-6 text-blue-600" />
+                              <p className="text-xl font-black text-blue-900 tracking-tight">{detailAsset.tagId || 'NÃO TAGUEADO'}</p>
+                          </div>
+                          {detailAsset.serialNumber && (
+                            <div className="flex items-center gap-2 opacity-70">
+                               <Barcode className="w-4 h-4 text-blue-600" />
+                               <p className="text-xs font-mono font-bold text-blue-900">S/N: {detailAsset.serialNumber}</p>
+                            </div>
+                          )}
                        </div>
                     </div>
                  </div>

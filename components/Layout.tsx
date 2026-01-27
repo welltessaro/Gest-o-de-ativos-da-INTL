@@ -23,7 +23,8 @@ import {
   Trash2,
   Check,
   Calculator,
-  Book
+  Book,
+  Database
 } from 'lucide-react';
 import { AppModule, UserAccount, EquipmentRequest, AppNotification } from '../types';
 
@@ -69,6 +70,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'user-management', label: 'Gestão de Usuários', icon: ShieldCheck },
     { id: 'inventory-check', label: 'Check semestral', icon: ClipboardList },
     { id: 'accounting', label: 'Classificação Contábil', icon: Calculator },
+    { id: 'system-info', label: 'Informações do Sistema', icon: Database },
   ];
 
   const getNotifIcon = (type: AppNotification['type']) => {
