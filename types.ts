@@ -19,23 +19,20 @@ export interface Department {
   createdAt: string;
 }
 
+// Estrutura Unificada
 export interface AccountingAccount {
   id: string;
-  code: string;
-  name: string;
-}
-
-export interface AccountingClassification {
-  id: string;
-  name: string;
-  code: string;
-  accountId: string;
+  code: string; // Número da Conta
+  name: string; // Classificação Contábil
+  costCenter?: string;
+  type?: 'Ativo' | 'Despesa' | 'Custo' | 'Outros';
+  depreciates?: boolean;
 }
 
 export interface AssetTypeConfig {
   id: string;
   name: string;
-  classificationId?: string;
+  accountId?: string; // Vínculo direto com a conta
 }
 
 export interface Asset {

@@ -3,33 +3,101 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   Asset, Department, Employee, EquipmentRequest, AuditSession, 
   UserAccount, AppNotification, AccountingAccount, 
-  AccountingClassification, AssetTypeConfig 
+  AssetTypeConfig 
 } from '../types';
 
+// Configuração da Conexão
 const SUPABASE_URL = 'https://zcbphldaobriwkpqcupa.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_5GUfPGtwRSMJHjNqocwqwA_GUm6U0PE';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Sistema de Cache Local (Fallback Offline)
+// --- SISTEMA DE CACHE LOCAL (FALLBACK OFFLINE) ---
+// Utilizado quando a conexão com o Supabase falha ou para dados temporários
 const localDB = {
-  save: (key: string, data: any) => localStorage.setItem(`assettrack_${key}`, JSON.stringify(data)),
+  save: (key: string, data: any) => {
+    try {
+      localStorage.setItem(`assettrack_${key}`, JSON.stringify(data));
+    } catch (e) { console.error('Erro ao salvar cache local', e); }
+  },
   get: (key: string) => {
-    const val = localStorage.getItem(`assettrack_${key}`);
-    return val ? JSON.parse(val) : null;
+    try {
+      const val = localStorage.getItem(`assettrack_${key}`);
+      return val ? JSON.parse(val) : null;
+    } catch (e) { return null; }
   }
 };
 
-// --- MÉTODOS DE ACESSO LIMPOS ---
+// --- HELPER GENÉRICO DE BANCO DE DADOS ---
+// Padroniza as operações de CRUD para evitar repetição de código
+const createTableManager = <T extends { id: string }>(tableName: string, cacheKey: string) => ({
+  list: async (): Promise<T[]> => {
+    try {
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .order('id', { ascending: true }); // Ordenação padrão segura
+
+      if (error) throw error;
+      
+      const safeData = data || [];
+      localDB.save(cacheKey, safeData);
+      return safeData as T[];
+    } catch (err) {
+      console.warn(`[Supabase] Erro ao listar ${tableName}, usando cache.`, err);
+      return localDB.get(cacheKey) || [];
+    }
+  },
+
+  upsert: async (item: T): Promise<void> => {
+    try {
+      // Remove campos undefined para evitar erros no JSON do Supabase
+      const cleanPayload = JSON.parse(JSON.stringify(item));
+      const { error } = await supabase.from(tableName).upsert(cleanPayload);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error(`[Supabase] Erro ao salvar em ${tableName}:`, err.message);
+      throw err;
+    }
+  },
+
+  remove: async (id: string): Promise<void> => {
+    try {
+      const { error } = await supabase.from(tableName).delete().eq('id', id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error(`[Supabase] Erro ao deletar de ${tableName}:`, err.message);
+      throw err;
+    }
+  },
+
+  // Novo método para limpar a tabela inteira
+  clearAll: async (): Promise<void> => {
+    try {
+      // Deleta tudo onde id não é '0' (praticamente tudo)
+      const { error } = await supabase.from(tableName).delete().neq('id', '0');
+      if (error) throw error;
+      // Limpa cache local também
+      localStorage.removeItem(`assettrack_${cacheKey}`);
+    } catch (err: any) {
+      console.error(`[Supabase] Erro ao limpar tabela ${tableName}:`, err.message);
+      throw err;
+    }
+  }
+});
+
+// --- IMPLEMENTAÇÃO ESPECÍFICA POR ENTIDADE ---
 
 export const db = {
+  // 1. ATIVOS
   assets: {
-    list: async () => {
+    ...createTableManager<Asset>('assets', 'assets'),
+    // Override do list para garantir tratamento de campos específicos
+    list: async (): Promise<Asset[]> => {
       try {
         const { data, error } = await supabase.from('assets').select('*').order('createdAt', { ascending: false });
         if (error) throw error;
         
-        // Normalização e Proteção contra Nulls
         const assets = (data || []).map((a: any) => ({
           ...a,
           purchaseValue: Number(a.purchaseValue) || 0,
@@ -42,215 +110,98 @@ export const db = {
         localDB.save('assets', assets);
         return assets;
       } catch (err) {
-        console.warn("Supabase offline/erro, usando cache local para ativos.");
         return localDB.get('assets') || [];
       }
-    },
-    upsert: async (asset: Asset) => {
-      const payload = {
-        ...asset,
-        purchaseValue: asset.purchaseValue ?? 0,
-        assignedTo: asset.assignedTo || null,
-        departmentId: asset.departmentId || null,
-        tagId: asset.tagId || null,
-        photos: asset.photos || [],
-        history: asset.history || []
-      };
-      
-      const { error } = await supabase.from('assets').upsert(payload);
-      if (error) throw error;
-    },
-    remove: async (id: string) => {
-      const { error } = await supabase.from('assets').delete().eq('id', id);
-      if (error) throw error;
     }
   },
 
-  departments: {
-    list: async () => {
-      try {
-        const { data, error } = await supabase.from('departments').select('*');
-        if (error) throw error;
-        localDB.save('departments', data);
-        return (data || []) as Department[];
-      } catch (err) {
-        return localDB.get('departments') || [];
-      }
-    },
-    upsert: async (dept: Department) => {
-      const { error } = await supabase.from('departments').upsert(dept);
-      if (error) throw error;
-    },
-    remove: async (id: string) => {
-      const { error } = await supabase.from('departments').delete().eq('id', id);
-      if (error) throw error;
-    }
-  },
+  // 2. DEPARTAMENTOS
+  departments: createTableManager<Department>('departments', 'departments'),
 
-  employees: {
-    list: async () => {
-      try {
-        const { data, error } = await supabase.from('employees').select('*');
-        if (error) throw error;
-        localDB.save('employees', data);
-        return (data || []) as Employee[];
-      } catch (err) {
-        return localDB.get('employees') || [];
-      }
-    },
-    upsert: async (emp: Employee) => {
-      const payload = {
-        ...emp,
-        departmentId: emp.departmentId || null
-      };
-      const { error } = await supabase.from('employees').upsert(payload);
-      if (error) throw error;
-    },
-    remove: async (id: string) => {
-      const { error } = await supabase.from('employees').delete().eq('id', id);
-      if (error) throw error;
-    }
-  },
+  // 3. COLABORADORES
+  employees: createTableManager<Employee>('employees', 'employees'),
 
+  // 4. REQUISIÇÕES
   requests: {
-    list: async () => {
+    ...createTableManager<EquipmentRequest>('requests', 'requests'),
+    list: async (): Promise<EquipmentRequest[]> => {
       try {
         const { data, error } = await supabase.from('requests').select('*').order('createdAt', { ascending: false });
         if (error) throw error;
-        
         const requests = (data || []).map((r: any) => ({
            ...r,
            items: r.items || [],
            itemFulfillments: r.itemFulfillments || []
-        })) as EquipmentRequest[];
-        
+        }));
         localDB.save('requests', requests);
         return requests;
-      } catch (err) {
-        return localDB.get('requests') || [];
-      }
-    },
-    upsert: async (req: EquipmentRequest) => {
-      const payload = {
-        ...req,
-        employeeId: req.employeeId || null,
-        items: req.items || [],
-        itemFulfillments: req.itemFulfillments || []
-      };
-      const { error } = await supabase.from('requests').upsert(payload);
-      if (error) throw error;
-    },
-    remove: async (id: string) => {
-      const { error } = await supabase.from('requests').delete().eq('id', id);
-      if (error) throw error;
+      } catch (err) { return localDB.get('requests') || []; }
     }
   },
 
+  // 5. USUÁRIOS E AUTENTICAÇÃO
   users: {
-    list: async () => {
-      try {
-        const { data, error } = await supabase.from('users').select('*');
-        if (error) throw error;
-        
-        return (data || []).map((u: any) => ({
-            ...u,
-            modules: u.modules || []
-        })) as UserAccount[];
-      } catch (err) { return []; }
-    },
-    getForAuth: async (username: string) => {
+    ...createTableManager<UserAccount>('users', 'users'),
+    getForAuth: async (username: string): Promise<UserAccount | null> => {
       try {
         const { data, error } = await supabase
           .from('users')
           .select('*')
           .eq('username', username.toLowerCase().trim())
           .single();
-        if (error) throw error;
         
-        if (data) {
-           data.modules = data.modules || [];
-        }
+        if (error || !data) return null;
         
-        return data as UserAccount;
-      } catch (err: any) { return null; }
+        return {
+          ...data,
+          modules: data.modules || []
+        } as UserAccount;
+      } catch (err) { return null; }
     },
+    // Override upsert para garantir username em lowercase
     upsert: async (user: UserAccount) => {
-      // Garante que o username seja minúsculo e sem espaços
       const payload = {
         ...user,
         username: user.username.toLowerCase().trim(),
-        employeeId: user.employeeId || null,
         modules: user.modules || []
       };
       const { error } = await supabase.from('users').upsert(payload);
       if (error) throw error;
-    },
-    remove: async (id: string) => {
-      const { error } = await supabase.from('users').delete().eq('id', id);
-      if (error) throw error;
     }
   },
 
-  // --- MÓDULOS SECUNDÁRIOS E CONFIGURAÇÕES ---
-
+  // 6. CONTABILIDADE (PLANO DE CONTAS)
   accountingAccounts: {
-    list: async () => {
+    ...createTableManager<AccountingAccount>('accounting_accounts', 'accounting_accounts'),
+    list: async (): Promise<AccountingAccount[]> => {
       try {
         const { data, error } = await supabase.from('accounting_accounts').select('*').order('code', { ascending: true });
         if (error) throw error;
         return (data || []) as AccountingAccount[];
-      } catch (err: any) { return []; }
-    },
-    upsert: async (account: AccountingAccount) => {
-      const { error } = await supabase.from('accounting_accounts').upsert(account);
-      if (error) throw error;
-    },
-    remove: async (id: string) => {
-      const { error } = await supabase.from('accounting_accounts').delete().eq('id', id);
-      if (error) throw error;
+      } catch (err) { return []; }
     }
   },
 
-  accountingClassifications: {
-    list: async () => {
-      try {
-        const { data, error } = await supabase.from('accounting_classifications').select('*').order('code', { ascending: true });
-        if (error) throw error;
-        return (data || []) as AccountingClassification[];
-      } catch (err: any) { return []; }
-    },
-    upsert: async (classification: AccountingClassification) => {
-      const { error } = await supabase.from('accounting_classifications').upsert(classification);
-      if (error) throw error;
-    },
-    remove: async (id: string) => {
-      const { error } = await supabase.from('accounting_classifications').delete().eq('id', id);
-      if (error) throw error;
-    }
-  },
-
+  // 7. CONFIGURAÇÃO DE TIPOS DE ATIVO
   assetTypeConfigs: {
-    list: async () => {
-      try {
-        const { data, error } = await supabase.from('asset_type_configs').select('*').order('name', { ascending: true });
-        if (error) throw error;
-        return (data || []) as AssetTypeConfig[];
-      } catch (err: any) { return []; }
-    },
+    ...createTableManager<AssetTypeConfig>('asset_type_configs', 'asset_type_configs'),
     upsert: async (config: AssetTypeConfig) => {
-      const { error } = await supabase.from('asset_type_configs').upsert(config);
-      if (error) throw error;
-    },
-    remove: async (id: string) => {
-      const { error } = await supabase.from('asset_type_configs').delete().eq('id', id);
+      // Sanitização estrita para remover campos legados (classificationId)
+      const payload = {
+        id: config.id,
+        name: config.name,
+        accountId: config.accountId || null
+      };
+      const { error } = await supabase.from('asset_type_configs').upsert(payload);
       if (error) throw error;
     }
   },
 
+  // 8. NOTIFICAÇÕES
   notifications: {
-    list: async () => {
+    list: async (): Promise<AppNotification[]> => {
       try {
-        const { data, error } = await supabase.from('notifications').select('*').order('createdAt', { ascending: false }).limit(50);
+        const { data, error } = await supabase.from('notifications').select('*').order('createdAt', { ascending: false }).limit(100);
         if (error) throw error;
         return (data || []) as AppNotification[];
       } catch (err) { return []; }
@@ -264,34 +215,18 @@ export const db = {
       if (error) throw error;
     },
     clearAll: async () => {
-      const { error } = await supabase.from('notifications').delete().neq('id', 'clear_marker');
+      // Nota: Supabase não tem delete * sem where por segurança, usamos um workaround ou deletamos um a um no backend real
+      // Para este app, vamos assumir que o usuário limpa localmente ou deletamos por ID
+      const { error } = await supabase.from('notifications').delete().neq('id', '0'); 
       if (error) throw error;
     }
   },
 
-  auditSessions: {
-    list: async () => {
-      try {
-        const { data, error } = await supabase.from('audit_sessions').select('*').order('createdAt', { ascending: false });
-        if (error) throw error;
-        
-        return (data || []).map((s: any) => ({
-           ...s,
-           entries: s.entries || []
-        })) as AuditSession[];
-      } catch (err) { return []; }
-    },
-    upsert: async (session: AuditSession) => {
-      const payload = {
-         ...session,
-         entries: session.entries || []
-      };
-      const { error } = await supabase.from('audit_sessions').upsert(payload);
-      if (error) throw error;
-    },
-    remove: async (id: string) => {
-      const { error } = await supabase.from('audit_sessions').delete().eq('id', id);
-      if (error) throw error;
-    }
+  // 9. AUDITORIAS
+  auditSessions: createTableManager<AuditSession>('audit_sessions', 'audit_sessions'),
+
+  // Módulos Legados (Mantidos vazios para compatibilidade se algo chamar)
+  accountingClassifications: {
+    list: async () => [], upsert: async () => {}, remove: async () => {}
   }
 };

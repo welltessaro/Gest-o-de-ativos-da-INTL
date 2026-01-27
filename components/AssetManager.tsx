@@ -1,61 +1,22 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  Plus, 
-  Search, 
-  Trash2,
-  X,
-  Cpu,
-  Layers,
-  Monitor,
-  Wifi,
-  Usb,
-  Zap,
-  Type,
-  History,
-  Clock,
-  User,
-  Wrench,
-  CheckCircle2,
-  Tag,
-  ArrowRight,
-  ShieldCheck,
-  FileSpreadsheet,
-  PlusCircle,
-  Save,
-  MessageSquarePlus,
-  AlertCircle,
-  Loader2,
-  Building2,
-  Package,
-  ArrowLeftRight,
-  Camera,
-  ImageIcon,
-  ScanBarcode,
-  Edit2,
-  HardDrive,
-  Microchip,
-  Filter,
-  Eye,
-  EyeOff,
-  Book,
-  DollarSign,
-  Barcode
+  Plus, Search, Trash2, X, Edit2, Tag, Book, DollarSign, Camera, ScanBarcode, Barcode, Eye, EyeOff, Loader2, Save, User, History, Clock
 } from 'lucide-react';
-import { Asset, AssetType, Employee, Department, HistoryEntry, AssetStatus, AssetTypeConfig, AccountingClassification } from '../types';
+import { Asset, AssetType, Employee, Department, HistoryEntry, AssetTypeConfig, AccountingAccount } from '../types';
 
 interface AssetManagerProps {
   assets: Asset[];
   employees: Employee[];
   companies: Department[];
   assetTypeConfigs: AssetTypeConfig[];
-  classifications: AccountingClassification[];
+  accounts: AccountingAccount[]; // Alterado de classifications
   onAdd: (asset: Omit<Asset, 'id' | 'createdAt' | 'qrCode' | 'history'> & { id?: string }) => Promise<void>;
   onUpdate: (asset: Asset) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
 }
 
-const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companies, assetTypeConfigs, classifications, onAdd, onUpdate, onRemove }) => {
+const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companies, assetTypeConfigs, accounts, onAdd, onUpdate, onRemove }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [detailAsset, setDetailAsset] = useState<Asset | null>(null);
@@ -95,7 +56,6 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
     }
   }, [companies, showForm, editingAsset]);
 
-  // Sincronização automática: Se ID for preenchido manualmente, copia para tagId
   useEffect(() => {
     if (formData.id && formData.id.trim() !== '') {
       setFormData(prev => ({ ...prev, tagId: prev.id }));
@@ -107,8 +67,8 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
 
   const getClassificationForType = (typeName: string) => {
     const config = assetTypeConfigs.find(t => t.name === typeName);
-    if (!config) return null;
-    return classifications.find(c => c.id === config.classificationId);
+    if (!config || !config.accountId) return null;
+    return accounts.find(a => a.id === config.accountId);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -135,7 +95,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
 
   const openEditModal = (asset: Asset) => {
     setEditingAsset(asset);
-    setFormData({ ...asset, assignedTo: asset.assignedTo || '' }); // Garante que assignedTo nunca seja undefined
+    setFormData({ ...asset, assignedTo: asset.assignedTo || '' });
     setShowForm(true);
     setDetailAsset(null);
   };
@@ -229,7 +189,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
               {filteredAssets.map((asset) => {
-                const classification = getClassificationForType(asset.type);
+                const account = getClassificationForType(asset.type);
                 return (
                   <tr 
                     key={asset.id} 
@@ -247,10 +207,10 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
                         <span className="text-xs font-bold text-slate-800">{asset.type}</span>
                         {asset.serialNumber ? (
                           <span className="text-[9px] font-mono text-slate-500 uppercase tracking-tighter">SN: {asset.serialNumber}</span>
-                        ) : classification ? (
+                        ) : account ? (
                           <div className="flex items-center gap-1 mt-1">
                             <Book className="w-2.5 h-2.5 text-blue-500" />
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{classification.name}</span>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{account.name}</span>
                           </div>
                         ) : null}
                       </div>
@@ -313,6 +273,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
 
               <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* ... (Existing fields remain unchanged) ... */}
                     <div className="space-y-1.5">
                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ID Patrimonial Principal (Vazio = Auto)</label>
                        <input 
@@ -485,6 +446,7 @@ const AssetManager: React.FC<AssetManagerProps> = ({ assets, employees, companie
         </div>
       )}
 
+      {/* DETAIL MODAL (Unchanged) */}
       {detailAsset && (
         <div className="fixed inset-0 z-[150] flex items-center justify-end p-0 md:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
            <div className="bg-white w-full max-w-2xl h-full md:h-auto md:max-h-[90vh] md:rounded-[3rem] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 overflow-hidden">

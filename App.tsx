@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -18,7 +17,7 @@ import { MOCK_USERS } from './constants';
 import { 
   Asset, Employee, EquipmentRequest, UserAccount, 
   Department, AuditSession, AppNotification, AccountingAccount, 
-  AccountingClassification, AssetTypeConfig, HistoryEntry 
+  AssetTypeConfig, HistoryEntry 
 } from './types';
 import { db, supabase } from './services/supabase';
 import { Loader2, Package, WifiOff } from 'lucide-react';
@@ -38,9 +37,8 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
-  // Estados Contábeis
+  // Estados Contábeis (Agora simplificado)
   const [accountingAccounts, setAccountingAccounts] = useState<AccountingAccount[]>([]);
-  const [accountingClassifications, setAccountingClassifications] = useState<AccountingClassification[]>([]);
   const [assetTypeConfigs, setAssetTypeConfigs] = useState<AssetTypeConfig[]>([]);
 
   const loadData = async () => {
@@ -55,14 +53,23 @@ const App: React.FC = () => {
         db.users.list(),
         db.notifications.list(),
         db.accountingAccounts.list(),
-        db.accountingClassifications.list(),
         db.assetTypeConfigs.list()
       ]);
 
       const [
         depts, assts, emps, reqs, audits, userList, 
-        notifs, accAccounts, accClass, assetConfigs
-      ] = results.map(r => r.status === 'fulfilled' ? (r.value || []) : []);
+        notifs, accAccounts, assetConfigs
+      ] = results.map(r => r.status === 'fulfilled' ? (r.value || []) : []) as [
+        Department[],
+        Asset[],
+        Employee[],
+        EquipmentRequest[],
+        AuditSession[],
+        UserAccount[],
+        AppNotification[],
+        AccountingAccount[],
+        AssetTypeConfig[]
+      ];
       
       if (results.every(r => r.status === 'rejected')) setIsOffline(true);
 
@@ -72,7 +79,6 @@ const App: React.FC = () => {
       setRequests(reqs);
       setAuditSessions(audits);
       setAccountingAccounts(accAccounts);
-      setAccountingClassifications(accClass);
       setAssetTypeConfigs(assetConfigs);
       
       const finalUsers = userList && userList.length > 0 ? [...userList] : [...MOCK_USERS];
@@ -161,16 +167,14 @@ const App: React.FC = () => {
     }
 
     // LÓGICA DE CORREÇÃO DE VÍNCULO NO CADASTRO
-    // 1. Normaliza o assignedTo (garante que string vazia seja undefined)
     const assignedTo = assetData.assignedTo && assetData.assignedTo.trim() !== '' ? assetData.assignedTo : undefined;
     
-    // 2. Define o status inicial baseado se tem dono ou não
+    // Status inicial
     const initialStatus = assignedTo ? 'Em Uso' : 'Disponível';
 
-    // 3. Constrói o histórico inicial
+    // Histórico inicial
     const initialHistory: HistoryEntry[] = assetData.history || [];
     
-    // Adiciona evento de criação
     if (initialHistory.length === 0) {
       initialHistory.push({
         id: `HIST-CREATE-${Date.now()}`,
@@ -181,7 +185,6 @@ const App: React.FC = () => {
       });
     }
 
-    // Se já nasceu com dono, adiciona evento de atribuição
     if (assignedTo) {
       const empName = employees.find(e => e.id === assignedTo)?.name || 'Colaborador';
       initialHistory.push({
@@ -193,7 +196,6 @@ const App: React.FC = () => {
       });
     }
 
-    // 4. Se tiver dono, tenta pegar o departamento do dono automaticamente
     let departmentId = assetData.departmentId;
     if (assignedTo) {
        const emp = employees.find(e => e.id === assignedTo);
@@ -206,8 +208,8 @@ const App: React.FC = () => {
       ...assetData, 
       id: finalId, 
       tagId: finalTagId,
-      assignedTo: assignedTo, // Usa o valor normalizado
-      status: initialStatus,  // Usa o status calculado
+      assignedTo: assignedTo, 
+      status: initialStatus,
       departmentId: departmentId,
       qrCode: `QR-${finalId}`,
       createdAt: new Date().toISOString(),
@@ -223,7 +225,6 @@ const App: React.FC = () => {
     const oldAsset = assets.find(a => a.id === updated.id);
     let finalAsset = { ...updated };
 
-    // Normaliza assignedTo: string vazia vira undefined para comparação consistente
     if (finalAsset.assignedTo === '') {
       finalAsset.assignedTo = undefined;
     }
@@ -231,8 +232,6 @@ const App: React.FC = () => {
     const oldAssigned = oldAsset?.assignedTo || undefined;
     const newAssigned = finalAsset.assignedTo || undefined;
 
-    // --- LÓGICA DE DETECÇÃO DE MUDANÇA DE RESPONSÁVEL ---
-    // Detecta mudança real entre undefined e IDs válidos
     if (oldAsset && oldAssigned !== newAssigned) {
        const newEmp = employees.find(e => e.id === newAssigned);
        const oldEmp = employees.find(e => e.id === oldAssigned);
@@ -247,22 +246,18 @@ const App: React.FC = () => {
           performedBy: currentUser?.name || 'Sistema'
        };
 
-       // Adiciona ao histórico existente
        finalAsset.history = [...(finalAsset.history || []), historyEntry];
 
-       // Se atribuído a alguém, atualiza o departamento do ativo para o do funcionário
        if (newEmp && newEmp.departmentId) {
           finalAsset.departmentId = newEmp.departmentId;
        }
     }
 
-    // --- LÓGICA DE STATUS ---
     if (finalAsset.status === 'Baixado') {
       finalAsset.assignedTo = undefined;
     } else if (finalAsset.status === 'Manutenção') {
        // Mantém como está
     } else {
-      // Automático: Se tem dono, é 'Em Uso'. Se não tem, é 'Disponível'.
       if (finalAsset.assignedTo) {
         finalAsset.status = 'Em Uso';
       } else {
@@ -288,20 +283,16 @@ const App: React.FC = () => {
     setAssets(prev => (prev || []).filter(a => a.id !== id));
   };
 
-  // --- LÓGICA DE INATIVAÇÃO DE COLABORADOR E DESVINCULAÇÃO ---
   const handleRemoveEmployee = async (id: string) => {
     const target = employees.find(e => e.id === id);
     if (!target) return;
 
-    // 1. Inativar Colaborador
     const updatedEmployee = { ...target, isActive: false };
     await db.employees.upsert(updatedEmployee);
     setEmployees(prev => prev.map(e => e.id === id ? updatedEmployee : e));
 
-    // 2. Localizar Ativos Vinculados
     const linkedAssets = assets.filter(a => a.assignedTo === id);
 
-    // 3. Desvincular Ativos e Retornar ao Estoque
     if (linkedAssets.length > 0) {
       const updatedAssets: Asset[] = [];
 
@@ -316,8 +307,8 @@ const App: React.FC = () => {
 
         const updatedAsset: Asset = {
           ...asset,
-          assignedTo: undefined, // Remove o vínculo
-          status: 'Disponível', // Retorna para estoque/disponível
+          assignedTo: undefined, 
+          status: 'Disponível', 
           history: [...(asset.history || []), newHistoryEntry]
         };
 
@@ -325,7 +316,6 @@ const App: React.FC = () => {
         updatedAssets.push(updatedAsset);
       }
 
-      // Atualiza estado local dos ativos
       setAssets(prev => prev.map(a => {
         const updated = updatedAssets.find(u => u.id === a.id);
         return updated || a;
@@ -461,10 +451,10 @@ const App: React.FC = () => {
             return <Dashboard 
               assets={assets} 
               requests={requests} 
-              employees={employees} // Passamos todos para resolver nomes, o filtro é interno
-              departments={departments} // Passamos departamentos para exportação
+              employees={employees} 
+              departments={departments}
               assetTypeConfigs={assetTypeConfigs}
-              classifications={accountingClassifications}
+              accounts={accountingAccounts} // Atualizado: passa 'accounts' em vez de 'classifications'
             />;
           case 'departments': 
             return <CompanyManager 
@@ -477,7 +467,17 @@ const App: React.FC = () => {
               onUpdateCompany={async (u) => { await db.departments.upsert(u); setDepartments(prev => prev.map(d => d.id === u.id ? u : d)); }} 
               onRemoveCompany={async (id) => { await db.departments.remove(id); setDepartments(prev => prev.filter(d => d.id !== id)); }} 
             />;
-          case 'assets': return <AssetManager assets={assets} employees={activeEmployees} companies={departments} onAdd={handleAddAsset} onUpdate={handleUpdateAsset} onRemove={handleRemoveAsset} assetTypeConfigs={assetTypeConfigs} classifications={accountingClassifications} />;
+          case 'assets': 
+            return <AssetManager 
+              assets={assets} 
+              employees={activeEmployees} 
+              companies={departments} 
+              onAdd={handleAddAsset} 
+              onUpdate={handleUpdateAsset} 
+              onRemove={handleRemoveAsset} 
+              assetTypeConfigs={assetTypeConfigs} 
+              accounts={accountingAccounts} // Atualizado
+            />;
           case 'employees': 
             return <EmployeeManager 
               employees={activeEmployees} departments={departments} assets={assets} users={users} requests={requests}
@@ -487,7 +487,7 @@ const App: React.FC = () => {
                 setEmployees(prev => [...prev, newE]); 
               }} 
               onUpdate={async (u) => { await db.employees.upsert(u); setEmployees(prev => prev.map(e => e.id === u.id ? u : e)); }}
-              onRemove={handleRemoveEmployee} // Usa a nova lógica de desvinculação
+              onRemove={handleRemoveEmployee} 
             />;
           case 'requests': 
             return <RequestsManager 
@@ -542,24 +542,25 @@ const App: React.FC = () => {
           case 'accounting':
             return <AccountingManager 
               accounts={accountingAccounts}
-              classifications={accountingClassifications}
               assetTypes={assetTypeConfigs}
+              departments={departments} 
               onAddAccount={async (a) => { const newA = {...a, id: `ACC-${Date.now()}`}; await db.accountingAccounts.upsert(newA); setAccountingAccounts(prev => [...prev, newA]); }}
               onUpdateAccount={async (a) => { await db.accountingAccounts.upsert(a); setAccountingAccounts(prev => prev.map(old => old.id === a.id ? a : old)); }}
               onRemoveAccount={async (id) => { await db.accountingAccounts.remove(id); setAccountingAccounts(prev => prev.filter(a => a.id !== id)); }}
-              onAddClassification={async (c) => { const newC = {...c, id: `CLS-${Date.now()}`}; await db.accountingClassifications.upsert(newC); setAccountingClassifications(prev => [...prev, newC]); }}
-              onUpdateClassification={async (c) => { await db.accountingClassifications.upsert(c); setAccountingClassifications(prev => prev.map(old => old.id === c.id ? c : old)); }}
-              onRemoveClassification={async (id) => { await db.accountingClassifications.remove(id); setAccountingClassifications(prev => prev.filter(c => c.id !== id)); }}
               onAddAssetType={async (t) => { const newT = {...t, id: `TYPE-${Date.now()}`}; await db.assetTypeConfigs.upsert(newT); setAssetTypeConfigs(prev => [...prev, newT]); }}
               onUpdateAssetType={async (t) => { await db.assetTypeConfigs.upsert(t); setAssetTypeConfigs(prev => prev.map(old => old.id === t.id ? t : old)); }}
               onRemoveAssetType={async (id) => { await db.assetTypeConfigs.remove(id); setAssetTypeConfigs(prev => prev.filter(t => t.id !== id)); }}
+              // Removed Classifications Handlers
+              onAddClassification={async () => {}} onUpdateClassification={async () => {}} onRemoveClassification={async () => {}}
             />;
           case 'system-info':
             return <SystemInfoManager 
               assets={assets} 
               requests={requests} 
               employees={employees} 
-              departments={departments} 
+              departments={departments}
+              assetTypeConfigs={assetTypeConfigs} 
+              accounts={accountingAccounts} // Atualizado
             />;
           default: return <div className="p-20 text-center text-slate-400 font-black uppercase tracking-widest text-xs">Módulo em Desenvolvimento</div>;
         }

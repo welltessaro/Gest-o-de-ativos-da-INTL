@@ -1,186 +1,169 @@
 
 -- ============================================================
--- ASSETTRACK PRO V2 - SCHEMA DEFINITIVO
+-- ASSETTRACK PRO - MASTER SCHEMA DEFINITION (V3.0)
+-- Execute este script no SQL Editor do Supabase para resetar/corrigir o banco
 -- ============================================================
--- Este script reseta e recria a estrutura para garantir integridade.
--- ATENÇÃO: Dados existentes podem ser perdidos se as tabelas forem recriadas.
 
--- 1. LIMPEZA (Opcional - Remove tabelas antigas para evitar conflitos de migração)
-DROP TABLE IF EXISTS public.asset_type_configs CASCADE;
-DROP TABLE IF EXISTS public.accounting_classifications CASCADE;
-DROP TABLE IF EXISTS public.accounting_accounts CASCADE;
-DROP TABLE IF EXISTS public.audit_sessions CASCADE;
-DROP TABLE IF EXISTS public.notifications CASCADE;
-DROP TABLE IF EXISTS public.requests CASCADE;
-DROP TABLE IF EXISTS public.assets CASCADE;
-DROP TABLE IF EXISTS public.users CASCADE;
-DROP TABLE IF EXISTS public.employees CASCADE;
-DROP TABLE IF EXISTS public.departments CASCADE;
+-- 1. LIMPEZA TOTAL (Opcional: Descomente se quiser limpar tudo antes de criar)
+-- DROP SCHEMA public CASCADE;
+-- CREATE SCHEMA public;
+-- GRANT ALL ON SCHEMA public TO postgres;
+-- GRANT ALL ON SCHEMA public TO public;
 
--- 2. DEPARTAMENTOS
-CREATE TABLE public.departments (
-    id TEXT PRIMARY KEY, 
-    name TEXT NOT NULL, 
-    "costCenter" TEXT, 
-    "createdAt" TIMESTAMPTZ DEFAULT NOW()
+-- 2. CRIAÇÃO DAS TABELAS
+
+-- Departamentos
+CREATE TABLE IF NOT EXISTS public.departments (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    "costCenter" TEXT,
+    "createdAt" TEXT
 );
 
--- 3. COLABORADORES
-CREATE TABLE public.employees (
-    id TEXT PRIMARY KEY, 
-    "departmentId" TEXT REFERENCES public.departments(id) ON DELETE SET NULL, 
-    name TEXT NOT NULL, 
-    sector TEXT, 
-    role TEXT, 
-    cpf TEXT, 
+-- Colaboradores
+CREATE TABLE IF NOT EXISTS public.employees (
+    id TEXT PRIMARY KEY,
+    "departmentId" TEXT REFERENCES public.departments(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    sector TEXT,
+    role TEXT,
+    cpf TEXT,
     "isActive" BOOLEAN DEFAULT TRUE
 );
 
--- 4. USUÁRIOS (Agora com employeeId nativo)
-CREATE TABLE public.users (
-    id TEXT PRIMARY KEY, 
-    name TEXT NOT NULL, 
-    username TEXT UNIQUE NOT NULL,
-    password TEXT DEFAULT 'admin',
+-- Contas Contábeis (Estrutura Unificada)
+CREATE TABLE IF NOT EXISTS public.accounting_accounts (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    "type" TEXT DEFAULT 'Ativo', -- Ativo, Despesa, Custo...
+    "depreciates" BOOLEAN DEFAULT TRUE,
+    "costCenter" TEXT
+);
+
+-- Tipos de Ativo (Mapeamento)
+CREATE TABLE IF NOT EXISTS public.asset_type_configs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    "accountId" TEXT REFERENCES public.accounting_accounts(id) ON DELETE SET NULL
+);
+
+-- Ativos (Assets)
+CREATE TABLE IF NOT EXISTS public.assets (
+    id TEXT PRIMARY KEY,
+    "tagId" TEXT,
+    "departmentId" TEXT REFERENCES public.departments(id) ON DELETE SET NULL,
+    "assignedTo" TEXT REFERENCES public.employees(id) ON DELETE SET NULL,
+    type TEXT NOT NULL,
+    brand TEXT,
+    model TEXT,
+    "serialNumber" TEXT,
+    "purchaseValue" NUMERIC,
+    status TEXT DEFAULT 'Disponível',
+    "qrCode" TEXT,
+    "createdAt" TEXT,
+    -- Campos de Hardware
+    ram TEXT,
+    storage TEXT,
+    processor TEXT,
+    "screenSize" TEXT,
+    "caseModel" TEXT,
+    "isWireless" BOOLEAN,
+    "monitorInputs" TEXT[], -- Array de strings no Supabase é suportado
+    "isAbnt" BOOLEAN,
+    "hasNumericKeypad" BOOLEAN,
+    observations TEXT,
+    photos TEXT[], -- Array de URLs base64
+    history JSONB[] -- Armazena o histórico como JSONB array
+);
+
+-- Requisições
+CREATE TABLE IF NOT EXISTS public.requests (
+    id TEXT PRIMARY KEY,
+    "requesterId" TEXT,
+    "employeeId" TEXT REFERENCES public.employees(id) ON DELETE SET NULL,
+    items TEXT[],
+    "itemFulfillments" JSONB[], -- Detalhes complexos da compra/vínculo
+    observation TEXT,
+    status TEXT DEFAULT 'Pendente',
+    "createdAt" TEXT,
+    type TEXT -- Padrao ou Divergencia
+);
+
+-- Usuários do Sistema
+CREATE TABLE IF NOT EXISTS public.users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    username TEXT NOT NULL UNIQUE,
+    password TEXT,
     sector TEXT,
     modules TEXT[],
     "employeeId" TEXT REFERENCES public.employees(id) ON DELETE SET NULL
 );
 
--- 5. ATIVOS (Com colunas financeiras e de tag nativas)
-CREATE TABLE public.assets (
-    id TEXT PRIMARY KEY, 
-    "tagId" TEXT,
-    "purchaseValue" NUMERIC DEFAULT 0,
-    "departmentId" TEXT REFERENCES public.departments(id) ON DELETE SET NULL, 
-    type TEXT NOT NULL, 
-    brand TEXT, 
-    model TEXT, 
-    "serialNumber" TEXT,
-    "processor" TEXT,
-    "ram" TEXT,
-    "storage" TEXT,
-    "screenSize" TEXT,
-    "caseModel" TEXT,
-    "isWireless" BOOLEAN,
-    "monitorInputs" TEXT[],
-    "isAbnt" BOOLEAN,
-    "hasNumericKeypad" BOOLEAN,
-    status TEXT DEFAULT 'Disponível', 
-    "assignedTo" TEXT REFERENCES public.employees(id) ON DELETE SET NULL, 
-    "qrCode" TEXT, 
-    observations TEXT, 
-    photos TEXT[], 
-    history JSONB DEFAULT '[]'::jsonb, 
-    "createdAt" TIMESTAMPTZ DEFAULT NOW()
+-- Notificações
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id TEXT PRIMARY KEY,
+    title TEXT,
+    message TEXT,
+    type TEXT,
+    "createdAt" TEXT,
+    "targetModule" TEXT,
+    "isRead" BOOLEAN DEFAULT FALSE
 );
 
--- 6. REQUISIÇÕES
-CREATE TABLE public.requests (
-    id TEXT PRIMARY KEY, 
-    "requesterId" TEXT, 
-    "employeeId" TEXT REFERENCES public.employees(id) ON DELETE SET NULL, 
-    items TEXT[], 
-    "itemFulfillments" JSONB DEFAULT '[]'::jsonb, 
-    observation TEXT, 
-    status TEXT DEFAULT 'Pendente', 
-    type TEXT DEFAULT 'Padrao', 
-    "createdAt" TIMESTAMPTZ DEFAULT NOW()
+-- Sessões de Auditoria
+CREATE TABLE IF NOT EXISTS public.audit_sessions (
+    id TEXT PRIMARY KEY,
+    sector TEXT,
+    "createdAt" TEXT,
+    entries JSONB[], -- Lista de itens auditados
+    "isFinished" BOOLEAN DEFAULT FALSE,
+    "generatedRequestId" TEXT
 );
 
--- 7. NOTIFICAÇÕES
-CREATE TABLE public.notifications (
-    id TEXT PRIMARY KEY, 
-    title TEXT, 
-    message TEXT, 
-    type TEXT, 
-    "targetModule" TEXT, 
-    "isRead" BOOLEAN DEFAULT FALSE, 
-    "createdAt" TIMESTAMPTZ DEFAULT NOW()
-);
+-- 3. PERMISSÕES DE SEGURANÇA (ROW LEVEL SECURITY - RLS)
+-- Política "Acesso Total" para uso interno simplificado
 
--- 8. AUDITORIAS
-CREATE TABLE public.audit_sessions (
-    id TEXT PRIMARY KEY, 
-    sector TEXT, 
-    entries JSONB DEFAULT '[]'::jsonb, 
-    "isFinished" BOOLEAN DEFAULT FALSE, 
-    "createdAt" TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 9. MÓDULO CONTÁBIL
-CREATE TABLE public.accounting_accounts (
-    id TEXT PRIMARY KEY, 
-    code TEXT NOT NULL, 
-    name TEXT NOT NULL
-);
-
-CREATE TABLE public.accounting_classifications (
-    id TEXT PRIMARY KEY, 
-    name TEXT NOT NULL, 
-    code TEXT NOT NULL, 
-    "accountId" TEXT REFERENCES public.accounting_accounts(id) ON DELETE CASCADE
-);
-
-CREATE TABLE public.asset_type_configs (
-    id TEXT PRIMARY KEY, 
-    name TEXT NOT NULL, 
-    "classificationId" TEXT REFERENCES public.accounting_classifications(id) ON DELETE SET NULL
-);
-
--- ============================================================
--- SEGURANÇA (RLS - Row Level Security)
--- ============================================================
-
+-- Habilita RLS em todas as tabelas
 ALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accounting_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.asset_type_configs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.accounting_accounts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.accounting_classifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.asset_type_configs ENABLE ROW LEVEL SECURITY;
 
--- Política de Acesso Total (Para protótipo interno)
-CREATE POLICY "Acesso Total" ON public.departments FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total" ON public.employees FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total" ON public.users FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total" ON public.assets FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total" ON public.requests FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total" ON public.audit_sessions FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total" ON public.accounting_accounts FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total" ON public.accounting_classifications FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso Total" ON public.asset_type_configs FOR ALL USING (true) WITH CHECK (true);
+-- Remove políticas antigas para evitar conflitos
+DROP POLICY IF EXISTS "Public Access" ON public.departments;
+DROP POLICY IF EXISTS "Public Access" ON public.employees;
+DROP POLICY IF EXISTS "Public Access" ON public.accounting_accounts;
+DROP POLICY IF EXISTS "Public Access" ON public.asset_type_configs;
+DROP POLICY IF EXISTS "Public Access" ON public.assets;
+DROP POLICY IF EXISTS "Public Access" ON public.requests;
+DROP POLICY IF EXISTS "Public Access" ON public.users;
+DROP POLICY IF EXISTS "Public Access" ON public.notifications;
+DROP POLICY IF EXISTS "Public Access" ON public.audit_sessions;
 
--- ============================================================
--- DADOS INICIAIS (SEED)
--- ============================================================
+-- Cria novas políticas permissivas (CRUD total para autenticados e anônimos neste contexto de app interno)
+CREATE POLICY "Public Access" ON public.departments FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON public.employees FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON public.accounting_accounts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON public.asset_type_configs FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON public.assets FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON public.requests FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON public.users FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON public.audit_sessions FOR ALL USING (true) WITH CHECK (true);
 
--- Usuário Admin Padrão (Com system-info incluído)
-INSERT INTO public.users (id, name, username, password, sector, modules)
-VALUES (
-    'admin-master-01', 
-    'Administrador Master', 
-    'admin', 
-    'admin', 
-    'Tecnologia', 
-    ARRAY[
-        'dashboard',
-        'departments',
-        'assets',
-        'maintenance',
-        'employees',
-        'requests',
-        'purchase-orders',
-        'printing',
-        'user-management',
-        'inventory-check',
-        'accounting',
-        'system-info'
-    ]
-)
-ON CONFLICT (username) DO UPDATE 
-SET modules = EXCLUDED.modules;
+-- 4. ÍNDICES DE PERFORMANCE (Opcional, mas recomendado)
+CREATE INDEX IF NOT EXISTS idx_assets_department ON public.assets("departmentId");
+CREATE INDEX IF NOT EXISTS idx_assets_assigned ON public.assets("assignedTo");
+CREATE INDEX IF NOT EXISTS idx_employees_department ON public.employees("departmentId");
+CREATE INDEX IF NOT EXISTS idx_requests_employee ON public.requests("employeeId");
+CREATE INDEX IF NOT EXISTS idx_configs_account ON public.asset_type_configs("accountId");
+
+-- Recarrega schema cache
+NOTIFY pgrst, 'reload schema';
