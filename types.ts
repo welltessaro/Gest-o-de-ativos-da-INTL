@@ -26,7 +26,6 @@ export interface AccountingAccount {
   name: string; // Classificação Contábil
   costCenter?: string;
   type?: 'Ativo' | 'Despesa' | 'Custo' | 'Outros';
-  depreciates?: boolean;
 }
 
 export interface AssetTypeConfig {

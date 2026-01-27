@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { Download, Database, ShieldCheck, Activity, Upload, Loader2, FileSpreadsheet, Trash2, AlertTriangle } from 'lucide-react';
-import { Asset, EquipmentRequest, Employee, Department, AssetTypeConfig, AccountingAccount } from '../types';
+import { Asset, EquipmentRequest, Employee, Department, AssetTypeConfig, AccountingAccount, UserAccount } from '../types';
 import { db } from '../services/supabase';
 
 interface SystemInfoManagerProps {
@@ -12,6 +12,7 @@ interface SystemInfoManagerProps {
   departments: Department[];
   assetTypeConfigs: AssetTypeConfig[];
   accounts: AccountingAccount[];
+  currentUser: UserAccount;
 }
 
 const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({ 
@@ -20,7 +21,8 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
   employees, 
   departments,
   assetTypeConfigs,
-  accounts
+  accounts,
+  currentUser
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -47,7 +49,6 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
           'Código da Conta': account?.code || '', // Adicionado: Código Contábil
           'Classificação Contábil (Nome)': account?.name || '',
           'Class. Tipo': account?.type || 'Ativo',
-          'Deprecia?': account?.depreciates === false ? 'Não' : 'Sim',
           'Centro Custo Class.': account?.costCenter || '',
           'Marca': a.brand,
           'Modelo': a.model,
@@ -221,24 +222,44 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
               const classificationName = (row['Classificação Contábil (Nome)'] || '').trim();
               const classificationCode = (row['Código da Conta'] ? String(row['Código da Conta']) : '').trim();
               
+              let accountId: string | undefined = undefined;
+
+              // 1. Tenta resolver ou criar a Conta Contábil (Plano de Contas)
+              if (classificationCode && classificationName) {
+                 if (accountCodeMap.has(classificationCode)) {
+                    accountId = accountCodeMap.get(classificationCode);
+                 } else {
+                    // CRIA NOVA CONTA SE NÃO EXISTIR NA BASE
+                    const newAccountId = `ACC-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+                    const newAccount: AccountingAccount = {
+                       id: newAccountId,
+                       code: classificationCode,
+                       name: classificationName,
+                       type: (row['Class. Tipo'] || 'Ativo') as any,
+                       costCenter: row['Centro Custo Class.'] || ''
+                    };
+                    await db.accountingAccounts.upsert(newAccount);
+                    
+                    // Atualiza mapas locais para que as próximas linhas usem a conta criada
+                    accountCodeMap.set(classificationCode, newAccountId);
+                    accountId = newAccountId;
+                 }
+              } else if (classificationCode) {
+                 // Se só tem código, tenta achar na base
+                 accountId = accountCodeMap.get(classificationCode);
+              } else if (classificationName) {
+                 // Se só tem nome, tenta achar na base
+                 accountId = accountNameMap.get(classificationName.toLowerCase());
+              }
+              
+              // 2. Atualiza/Cria Configuração do Tipo de Ativo e Vínculo
               if (typeName) {
                 const typeKey = typeName.toLowerCase();
                 const existingConfig = typeConfigMap.get(typeKey);
                 
-                let accountId = existingConfig?.accountId;
+                // Se já existe config, mas achamos um accountId novo via planilha, atualizamos
+                // Se não existe, criamos um novo Tipo de Ativo
                 
-                // Tenta achar pelo Código primeiro (mais preciso, agora robusto com leitura textual)
-                if (classificationCode) {
-                   const foundId = accountCodeMap.get(classificationCode);
-                   if (foundId) accountId = foundId;
-                }
-                
-                // Se não achou pelo código, tenta pelo Nome
-                if (!accountId && classificationName) {
-                  const foundId = accountNameMap.get(classificationName.toLowerCase());
-                  if (foundId) accountId = foundId;
-                }
-
                 if (!existingConfig) {
                   const newConfig: AssetTypeConfig = {
                     id: `TYPE-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
@@ -247,7 +268,8 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
                   };
                   await db.assetTypeConfigs.upsert(newConfig);
                   typeConfigMap.set(typeKey, newConfig); 
-                } else if (accountId && existingConfig && existingConfig.accountId !== accountId) {
+                } else if (accountId && existingConfig.accountId !== accountId) {
+                  // Atualiza vínculo se mudou na planilha
                   const updatedConfig: AssetTypeConfig = { ...existingConfig, accountId };
                   await db.assetTypeConfigs.upsert(updatedConfig);
                   typeConfigMap.set(typeKey, updatedConfig);
@@ -476,7 +498,8 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
          </div>
       </div>
 
-      {/* ZONA DE PERIGO - RESET DE BANCO */}
+      {/* ZONA DE PERIGO - RESET DE BANCO - VISIBLE ONLY TO ADMIN */}
+      {currentUser.username === 'admin' && (
       <div className="border-2 border-rose-100 bg-rose-50 rounded-[3rem] p-10 mt-8 flex flex-col md:flex-row items-center justify-between gap-8">
          <div className="flex items-start gap-4">
             <div className="w-14 h-14 bg-rose-600 rounded-2xl flex items-center justify-center text-white shrink-0">
@@ -499,6 +522,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
            {isClearing ? 'Apagando Dados...' : 'Apagar Tudo / Reset'}
          </button>
       </div>
+      )}
 
       <div className="text-center py-10 opacity-50">
          <p className="text-xs font-black uppercase tracking-widest text-slate-400">AssetTrack Pro Enterprise v2.7</p>

@@ -1,27 +1,35 @@
 
--- ============================================================
--- ASSETTRACK PRO - MASTER SCHEMA DEFINITION (V3.0)
--- Execute este script no SQL Editor do Supabase para resetar/corrigir o banco
--- ============================================================
+-- ==============================================================================
+-- ASSETTRACK PRO - MASTER DATABASE SCHEMA (FULL RESET)
+-- ==============================================================================
+-- ATENÇÃO: EXECUTE ESTE SCRIPT NO 'SQL EDITOR' DO SUPABASE.
+-- ELE APAGARÁ TODOS OS DADOS EXISTENTES PARA RECRIAR A ESTRUTURA CORRETA.
+-- ==============================================================================
 
--- 1. LIMPEZA TOTAL (Opcional: Descomente se quiser limpar tudo antes de criar)
--- DROP SCHEMA public CASCADE;
--- CREATE SCHEMA public;
--- GRANT ALL ON SCHEMA public TO postgres;
--- GRANT ALL ON SCHEMA public TO public;
+-- 1. LIMPEZA TOTAL (DROP TABLES)
+-- Remove tabelas na ordem correta para respeitar dependências (Foreign Keys)
+DROP TABLE IF EXISTS public.audit_sessions CASCADE;
+DROP TABLE IF EXISTS public.notifications CASCADE;
+DROP TABLE IF EXISTS public.requests CASCADE;
+DROP TABLE IF EXISTS public.users CASCADE;
+DROP TABLE IF EXISTS public.assets CASCADE;
+DROP TABLE IF EXISTS public.asset_type_configs CASCADE;
+DROP TABLE IF EXISTS public.accounting_accounts CASCADE;
+DROP TABLE IF EXISTS public.employees CASCADE;
+DROP TABLE IF EXISTS public.departments CASCADE;
 
--- 2. CRIAÇÃO DAS TABELAS
+-- 2. CRIAÇÃO DAS TABELAS (CREATE TABLES)
 
--- Departamentos
-CREATE TABLE IF NOT EXISTS public.departments (
+-- 2.1 Departamentos
+CREATE TABLE public.departments (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     "costCenter" TEXT,
     "createdAt" TEXT
 );
 
--- Colaboradores
-CREATE TABLE IF NOT EXISTS public.employees (
+-- 2.2 Colaboradores
+CREATE TABLE public.employees (
     id TEXT PRIMARY KEY,
     "departmentId" TEXT REFERENCES public.departments(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
@@ -31,27 +39,26 @@ CREATE TABLE IF NOT EXISTS public.employees (
     "isActive" BOOLEAN DEFAULT TRUE
 );
 
--- Contas Contábeis (Estrutura Unificada)
-CREATE TABLE IF NOT EXISTS public.accounting_accounts (
+-- 2.3 Contas Contábeis (Plano de Contas)
+CREATE TABLE public.accounting_accounts (
     id TEXT PRIMARY KEY,
     code TEXT NOT NULL,
     name TEXT NOT NULL,
-    "type" TEXT DEFAULT 'Ativo', -- Ativo, Despesa, Custo...
-    "depreciates" BOOLEAN DEFAULT TRUE,
+    "type" TEXT DEFAULT 'Ativo', -- Ex: Ativo, Despesa, Custo
     "costCenter" TEXT
 );
 
--- Tipos de Ativo (Mapeamento)
-CREATE TABLE IF NOT EXISTS public.asset_type_configs (
+-- 2.4 Configuração de Tipos de Ativo
+CREATE TABLE public.asset_type_configs (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     "accountId" TEXT REFERENCES public.accounting_accounts(id) ON DELETE SET NULL
 );
 
--- Ativos (Assets)
-CREATE TABLE IF NOT EXISTS public.assets (
+-- 2.5 Ativos (Inventário)
+CREATE TABLE public.assets (
     id TEXT PRIMARY KEY,
-    "tagId" TEXT,
+    "tagId" TEXT, -- Etiqueta física
     "departmentId" TEXT REFERENCES public.departments(id) ON DELETE SET NULL,
     "assignedTo" TEXT REFERENCES public.employees(id) ON DELETE SET NULL,
     type TEXT NOT NULL,
@@ -59,71 +66,80 @@ CREATE TABLE IF NOT EXISTS public.assets (
     model TEXT,
     "serialNumber" TEXT,
     "purchaseValue" NUMERIC,
-    status TEXT DEFAULT 'Disponível',
+    status TEXT DEFAULT 'Disponível', -- Disponível, Em Uso, Manutenção, Baixado
     "qrCode" TEXT,
     "createdAt" TEXT,
-    -- Campos de Hardware
+    
+    -- Especificações Técnicas
     ram TEXT,
     storage TEXT,
     processor TEXT,
     "screenSize" TEXT,
     "caseModel" TEXT,
     "isWireless" BOOLEAN,
-    "monitorInputs" TEXT[], -- Array de strings no Supabase é suportado
+    "monitorInputs" TEXT[], -- Array de Strings
     "isAbnt" BOOLEAN,
     "hasNumericKeypad" BOOLEAN,
+    
     observations TEXT,
-    photos TEXT[], -- Array de URLs base64
-    history JSONB[] -- Armazena o histórico como JSONB array
+    photos TEXT[], -- Array de URLs (Base64 ou Links)
+    history JSONB[] -- Array de Objetos JSON para log de movimentação
 );
 
--- Requisições
-CREATE TABLE IF NOT EXISTS public.requests (
-    id TEXT PRIMARY KEY,
-    "requesterId" TEXT,
-    "employeeId" TEXT REFERENCES public.employees(id) ON DELETE SET NULL,
-    items TEXT[],
-    "itemFulfillments" JSONB[], -- Detalhes complexos da compra/vínculo
-    observation TEXT,
-    status TEXT DEFAULT 'Pendente',
-    "createdAt" TEXT,
-    type TEXT -- Padrao ou Divergencia
-);
-
--- Usuários do Sistema
-CREATE TABLE IF NOT EXISTS public.users (
+-- 2.6 Usuários do Sistema (Login)
+CREATE TABLE public.users (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     username TEXT NOT NULL UNIQUE,
     password TEXT,
     sector TEXT,
-    modules TEXT[],
+    modules TEXT[], -- Array de strings com os módulos permitidos
     "employeeId" TEXT REFERENCES public.employees(id) ON DELETE SET NULL
 );
 
--- Notificações
-CREATE TABLE IF NOT EXISTS public.notifications (
+-- 2.7 Requisições e Pedidos
+CREATE TABLE public.requests (
+    id TEXT PRIMARY KEY,
+    "requesterId" TEXT, -- ID do usuário que abriu (sem FK estrita para permitir flexibilidade)
+    "employeeId" TEXT REFERENCES public.employees(id) ON DELETE SET NULL, -- Beneficiário
+    items TEXT[], -- Array de tipos solicitados
+    "itemFulfillments" JSONB[], -- Detalhes complexos (Cotações, Vínculos, Status por item)
+    observation TEXT,
+    status TEXT DEFAULT 'Pendente',
+    "createdAt" TEXT,
+    type TEXT -- 'Padrao' ou 'Divergencia'
+);
+
+-- 2.8 Notificações
+CREATE TABLE public.notifications (
     id TEXT PRIMARY KEY,
     title TEXT,
     message TEXT,
-    type TEXT,
+    type TEXT, -- info, maintenance, delivery, alert
     "createdAt" TEXT,
     "targetModule" TEXT,
     "isRead" BOOLEAN DEFAULT FALSE
 );
 
--- Sessões de Auditoria
-CREATE TABLE IF NOT EXISTS public.audit_sessions (
+-- 2.9 Auditorias (Check Semestral)
+CREATE TABLE public.audit_sessions (
     id TEXT PRIMARY KEY,
     sector TEXT,
     "createdAt" TEXT,
-    entries JSONB[], -- Lista de itens auditados
+    entries JSONB[], -- Lista de { assetId, status, checkedAt }
     "isFinished" BOOLEAN DEFAULT FALSE,
     "generatedRequestId" TEXT
 );
 
--- 3. PERMISSÕES DE SEGURANÇA (ROW LEVEL SECURITY - RLS)
--- Política "Acesso Total" para uso interno simplificado
+-- 3. INDICES DE PERFORMANCE
+CREATE INDEX idx_assets_department ON public.assets("departmentId");
+CREATE INDEX idx_assets_assigned ON public.assets("assignedTo");
+CREATE INDEX idx_employees_department ON public.employees("departmentId");
+CREATE INDEX idx_requests_employee ON public.requests("employeeId");
+CREATE INDEX idx_asset_configs_account ON public.asset_type_configs("accountId");
+CREATE INDEX idx_users_username ON public.users(username);
+
+-- 4. CONFIGURAÇÃO DE SEGURANÇA (ROW LEVEL SECURITY - RLS)
 
 -- Habilita RLS em todas as tabelas
 ALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;
@@ -131,39 +147,25 @@ ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.accounting_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.asset_type_configs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_sessions ENABLE ROW LEVEL SECURITY;
 
--- Remove políticas antigas para evitar conflitos
-DROP POLICY IF EXISTS "Public Access" ON public.departments;
-DROP POLICY IF EXISTS "Public Access" ON public.employees;
-DROP POLICY IF EXISTS "Public Access" ON public.accounting_accounts;
-DROP POLICY IF EXISTS "Public Access" ON public.asset_type_configs;
-DROP POLICY IF EXISTS "Public Access" ON public.assets;
-DROP POLICY IF EXISTS "Public Access" ON public.requests;
-DROP POLICY IF EXISTS "Public Access" ON public.users;
-DROP POLICY IF EXISTS "Public Access" ON public.notifications;
-DROP POLICY IF EXISTS "Public Access" ON public.audit_sessions;
+-- Cria política de ACESSO TOTAL para a API (Anon/Authenticated/ServiceRole)
+-- Como a autenticação é gerenciada via tabela 'users' na aplicação, o banco
+-- deve permitir operações CRUD completas para a chave de API configurada.
 
--- Cria novas políticas permissivas (CRUD total para autenticados e anônimos neste contexto de app interno)
-CREATE POLICY "Public Access" ON public.departments FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access" ON public.employees FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access" ON public.accounting_accounts FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access" ON public.asset_type_configs FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access" ON public.assets FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access" ON public.requests FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access" ON public.users FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Access" ON public.audit_sessions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable All Access" ON public.departments FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable All Access" ON public.employees FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable All Access" ON public.accounting_accounts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable All Access" ON public.asset_type_configs FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable All Access" ON public.assets FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable All Access" ON public.users FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable All Access" ON public.requests FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable All Access" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable All Access" ON public.audit_sessions FOR ALL USING (true) WITH CHECK (true);
 
--- 4. ÍNDICES DE PERFORMANCE (Opcional, mas recomendado)
-CREATE INDEX IF NOT EXISTS idx_assets_department ON public.assets("departmentId");
-CREATE INDEX IF NOT EXISTS idx_assets_assigned ON public.assets("assignedTo");
-CREATE INDEX IF NOT EXISTS idx_employees_department ON public.employees("departmentId");
-CREATE INDEX IF NOT EXISTS idx_requests_employee ON public.requests("employeeId");
-CREATE INDEX IF NOT EXISTS idx_configs_account ON public.asset_type_configs("accountId");
-
--- Recarrega schema cache
+-- 5. FINALIZAÇÃO
+-- Recarrega o cache de schema do PostgREST para garantir que a API reconheça as mudanças imediatamente
 NOTIFY pgrst, 'reload schema';

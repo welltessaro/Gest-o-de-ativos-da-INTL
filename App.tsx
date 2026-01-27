@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -550,8 +551,6 @@ const App: React.FC = () => {
               onAddAssetType={async (t) => { const newT = {...t, id: `TYPE-${Date.now()}`}; await db.assetTypeConfigs.upsert(newT); setAssetTypeConfigs(prev => [...prev, newT]); }}
               onUpdateAssetType={async (t) => { await db.assetTypeConfigs.upsert(t); setAssetTypeConfigs(prev => prev.map(old => old.id === t.id ? t : old)); }}
               onRemoveAssetType={async (id) => { await db.assetTypeConfigs.remove(id); setAssetTypeConfigs(prev => prev.filter(t => t.id !== id)); }}
-              // Removed Classifications Handlers
-              onAddClassification={async () => {}} onUpdateClassification={async () => {}} onRemoveClassification={async () => {}}
             />;
           case 'system-info':
             return <SystemInfoManager 
@@ -560,7 +559,8 @@ const App: React.FC = () => {
               employees={employees} 
               departments={departments}
               assetTypeConfigs={assetTypeConfigs} 
-              accounts={accountingAccounts} // Atualizado
+              accounts={accountingAccounts} 
+              currentUser={currentUser}
             />;
           default: return <div className="p-20 text-center text-slate-400 font-black uppercase tracking-widest text-xs">Módulo em Desenvolvimento</div>;
         }

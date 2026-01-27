@@ -67,13 +67,11 @@ const AccountingManager: React.FC<AccountingManagerProps> = ({
       code: account.code,
       name: account.name,
       type: account.type,
-      depreciates: account.depreciates,
       costCenter: account.costCenter
     } : { 
       code: '', 
       name: '', 
       type: 'Ativo', 
-      depreciates: true, 
       costCenter: '' 
     });
     setShowForm(true);
@@ -182,7 +180,6 @@ const AccountingManager: React.FC<AccountingManagerProps> = ({
                    <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Código</th>
                    <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Classificação (Nome)</th>
                    <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Natureza</th>
-                   <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Deprecia</th>
                    <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Centro Custo</th>
                    <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Ações</th>
                  </tr>
@@ -202,11 +199,6 @@ const AccountingManager: React.FC<AccountingManagerProps> = ({
                          acc.type === 'Despesa' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'
                        }`}>
                          {acc.type || 'Ativo'}
-                       </span>
-                     </td>
-                     <td className="px-6 py-4 text-center">
-                       <span className={`text-[10px] font-bold uppercase ${acc.depreciates !== false ? 'text-blue-600' : 'text-slate-400'}`}>
-                         {acc.depreciates !== false ? 'Sim' : 'Não'}
                        </span>
                      </td>
                      <td className="px-6 py-4 font-mono text-xs font-bold text-slate-600">
@@ -345,19 +337,6 @@ const AccountingManager: React.FC<AccountingManagerProps> = ({
                         ))}
                       </select>
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                     <input 
-                       type="checkbox" 
-                       id="checkDeprecia"
-                       className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
-                       checked={formData.depreciates !== false}
-                       onChange={e => setFormData({...formData, depreciates: e.target.checked})}
-                     />
-                     <label htmlFor="checkDeprecia" className="text-sm font-bold text-slate-700 cursor-pointer">
-                        Este item sofre depreciação?
-                     </label>
                   </div>
                 </>
               )}
