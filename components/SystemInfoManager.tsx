@@ -161,11 +161,17 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
       const assetData = assets.map(a => {
         const emp = employees.find(e => e.id === a.assignedTo);
         const dept = departments.find(d => d.id === a.departmentId);
-        const company = emp ? legalEntities.find(l => l.id === emp.legalEntityId) : null;
+        const company = emp ? (legalEntities || []).find(l => l.id === emp.legalEntityId) : null;
         
         // Resolve Classificação Contábil
         const config = assetTypeConfigs.find(c => c.name.toLowerCase().trim() === a.type.toLowerCase().trim());
         const account = accounts.find(c => c.id === config?.accountId);
+
+        // Tratamento Seguro de Fotos (Limite de 32k caracteres do Excel)
+        const photosStr = (a.photos || []).join('|||');
+        const safePhotosStr = photosStr.length > 32000 
+          ? "[ERRO_EXPORT] Imagens excedem limite de 32k caracteres da célula Excel." 
+          : photosStr;
 
         return {
           'ID Patrimonial': a.id,
@@ -187,7 +193,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
           'RAM': a.ram,
           'Armazenamento': a.storage,
           'Observações': a.observations,
-          'Fotos (Base64)': (a.photos || []).join('|||'), // Exporta fotos separadas por pipe triplo
+          'Fotos (Base64)': safePhotosStr,
           'Data Criação': new Date(a.createdAt).toLocaleDateString()
         };
       });
@@ -198,7 +204,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
       const employeeData = employees.map(e => {
         const dept = departments.find(d => d.id === e.departmentId);
         const assetCount = assets.filter(a => a.assignedTo === e.id).length;
-        const legal = legalEntities.find(l => l.id === e.legalEntityId);
+        const legal = (legalEntities || []).find(l => l.id === e.legalEntityId);
         return {
           'Nome': e.name,
           'CPF': e.cpf,
@@ -240,7 +246,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
       XLSX.utils.book_append_sheet(wb, wsDepts, "Departamentos");
 
       // 5. Aba de Dados Corporativos (Legal Entities)
-      const legalData = legalEntities.map(l => ({
+      const legalData = (legalEntities || []).map(l => ({
         'ID Sistema': l.id,
         'Razão Social': l.socialReason,
         'CNPJ': l.cnpj,
@@ -253,7 +259,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
       XLSX.writeFile(wb, `AssetTrack_Export_Completo_${new Date().toISOString().slice(0,10)}.xlsx`);
     } catch (error) {
       console.error("Erro na exportação:", error);
-      alert("Houve um erro ao gerar o arquivo Excel.");
+      alert("Houve um erro ao gerar o arquivo Excel. Verifique se há dados muito grandes (ex: imagens).");
     }
   };
 
@@ -434,7 +440,10 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
 
               // Importação de FOTOS (Split por |||)
               const rawPhotos = row['Fotos (Base64)'];
-              const importedPhotos = rawPhotos ? String(rawPhotos).split('|||').filter(p => p.trim() !== '') : [];
+              let importedPhotos: string[] = [];
+              if (rawPhotos && typeof rawPhotos === 'string' && !rawPhotos.startsWith('[ERRO')) {
+                 importedPhotos = rawPhotos.split('|||').filter(p => p.trim() !== '');
+              }
 
               const asset: Asset = {
                 id,
