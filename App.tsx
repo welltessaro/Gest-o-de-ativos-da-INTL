@@ -18,7 +18,7 @@ import { MOCK_USERS } from './constants';
 import { 
   Asset, Employee, EquipmentRequest, UserAccount, 
   Department, AuditSession, AppNotification, AccountingAccount, 
-  AssetTypeConfig, HistoryEntry 
+  AssetTypeConfig, HistoryEntry, LegalEntity 
 } from './types';
 import { db, supabase } from './services/supabase';
 import { Loader2, Package, WifiOff } from 'lucide-react';
@@ -38,9 +38,10 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
-  // Estados Contábeis (Agora simplificado)
+  // Estados Contábeis e Corporativos
   const [accountingAccounts, setAccountingAccounts] = useState<AccountingAccount[]>([]);
   const [assetTypeConfigs, setAssetTypeConfigs] = useState<AssetTypeConfig[]>([]);
+  const [legalEntities, setLegalEntities] = useState<LegalEntity[]>([]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -54,12 +55,13 @@ const App: React.FC = () => {
         db.users.list(),
         db.notifications.list(),
         db.accountingAccounts.list(),
-        db.assetTypeConfigs.list()
+        db.assetTypeConfigs.list(),
+        db.legalEntities.list()
       ]);
 
       const [
         depts, assts, emps, reqs, audits, userList, 
-        notifs, accAccounts, assetConfigs
+        notifs, accAccounts, assetConfigs, legalEnts
       ] = results.map(r => r.status === 'fulfilled' ? (r.value || []) : []) as [
         Department[],
         Asset[],
@@ -69,7 +71,8 @@ const App: React.FC = () => {
         UserAccount[],
         AppNotification[],
         AccountingAccount[],
-        AssetTypeConfig[]
+        AssetTypeConfig[],
+        LegalEntity[]
       ];
       
       if (results.every(r => r.status === 'rejected')) setIsOffline(true);
@@ -81,6 +84,7 @@ const App: React.FC = () => {
       setAuditSessions(audits);
       setAccountingAccounts(accAccounts);
       setAssetTypeConfigs(assetConfigs);
+      setLegalEntities(legalEnts);
       
       const finalUsers = userList && userList.length > 0 ? [...userList] : [...MOCK_USERS];
       if (!finalUsers.find(u => u.username === 'admin')) {
@@ -410,6 +414,22 @@ const App: React.FC = () => {
     setAuditSessions(prev => (prev || []).map(old => old.id === session.id ? session : old));
   };
 
+  // Funções de Gerenciamento de Entidades Legais
+  const handleAddLegalEntity = async (entity: LegalEntity) => {
+    await db.legalEntities.upsert(entity);
+    setLegalEntities(prev => [...prev, entity]);
+  };
+
+  const handleUpdateLegalEntity = async (entity: LegalEntity) => {
+    await db.legalEntities.upsert(entity);
+    setLegalEntities(prev => prev.map(l => l.id === entity.id ? entity : l));
+  };
+
+  const handleRemoveLegalEntity = async (id: string) => {
+    await db.legalEntities.remove(id);
+    setLegalEntities(prev => prev.filter(l => l.id !== id));
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-center">
@@ -455,7 +475,7 @@ const App: React.FC = () => {
               employees={employees} 
               departments={departments}
               assetTypeConfigs={assetTypeConfigs}
-              accounts={accountingAccounts} // Atualizado: passa 'accounts' em vez de 'classifications'
+              accounts={accountingAccounts} 
             />;
           case 'departments': 
             return <CompanyManager 
@@ -477,11 +497,12 @@ const App: React.FC = () => {
               onUpdate={handleUpdateAsset} 
               onRemove={handleRemoveAsset} 
               assetTypeConfigs={assetTypeConfigs} 
-              accounts={accountingAccounts} // Atualizado
+              accounts={accountingAccounts} 
             />;
           case 'employees': 
             return <EmployeeManager 
               employees={activeEmployees} departments={departments} assets={assets} users={users} requests={requests}
+              legalEntities={legalEntities}
               onAdd={async (e) => { 
                 const newE = {...e, id: `EMP-${Date.now()}`, isActive: true}; 
                 await db.employees.upsert(newE); 
@@ -498,6 +519,7 @@ const App: React.FC = () => {
               onUpdateStatus={async (id, status) => { const req = requests.find(r => r.id === id); if(req) await handleUpdateRequest({...req, status}); }} 
               onRemoveRequest={handleRemoveRequest}
               assetTypeConfigs={assetTypeConfigs}
+              legalEntities={legalEntities}
             />;
           case 'inventory-check': 
             return <InventoryCheckManager 
@@ -527,7 +549,16 @@ const App: React.FC = () => {
               onAddNotification={addNotification}
               onAddRequest={handleAddRequest}
             />;
-          case 'purchase-orders': return <PurchaseOrderManager requests={requests} employees={activeEmployees} onUpdateRequest={handleUpdateRequest} onAssetCreated={handleAddAsset} onAddRequest={handleAddRequest} assetTypeConfigs={assetTypeConfigs} />;
+          case 'purchase-orders': 
+            return <PurchaseOrderManager 
+              requests={requests} 
+              employees={activeEmployees} 
+              onUpdateRequest={handleUpdateRequest} 
+              onAssetCreated={handleAddAsset} 
+              onAddRequest={handleAddRequest} 
+              assetTypeConfigs={assetTypeConfigs} 
+              currentUser={currentUser}
+            />;
           case 'printing': return <PrintManager assets={assets} />;
           case 'user-management': 
             return <UserManager 
@@ -561,6 +592,10 @@ const App: React.FC = () => {
               assetTypeConfigs={assetTypeConfigs} 
               accounts={accountingAccounts} 
               currentUser={currentUser}
+              legalEntities={legalEntities}
+              onAddLegalEntity={handleAddLegalEntity}
+              onUpdateLegalEntity={handleUpdateLegalEntity}
+              onRemoveLegalEntity={handleRemoveLegalEntity}
             />;
           default: return <div className="p-20 text-center text-slate-400 font-black uppercase tracking-widest text-xs">Módulo em Desenvolvimento</div>;
         }

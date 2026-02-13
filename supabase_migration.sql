@@ -4,10 +4,13 @@
 -- ============================================================
 
 -- 1. Garante que a coluna 'employeeId' exista na tabela de usuários
--- Isso resolve erros de PGRST204 se o banco estiver desatualizado
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "employeeId" TEXT REFERENCES public.employees(id);
 
--- 2. Limpeza de políticas para garantir acesso correto (Anti-bloqueio RLS)
+-- 2. Adiciona as colunas de Segregação de Função Financeira
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "canApprovePurchase" BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "canExecutePurchase" BOOLEAN DEFAULT FALSE;
+
+-- 3. Limpeza de políticas para garantir acesso correto (Anti-bloqueio RLS)
 DO $$ 
 DECLARE 
     t text;
@@ -32,5 +35,5 @@ BEGIN
     END LOOP;
 END $$;
 
--- 3. Recarrega o cache do PostgREST para reconhecer novas colunas
+-- 4. Recarrega o cache do PostgREST para reconhecer novas colunas
 NOTIFY pgrst, 'reload schema';

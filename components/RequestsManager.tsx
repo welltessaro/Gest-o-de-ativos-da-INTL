@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import { EquipmentRequest, Employee, Asset, AssetType, UserAccount, AssetTypeConfig } from '../types';
+import { EquipmentRequest, Employee, Asset, AssetType, UserAccount, AssetTypeConfig, LegalEntity } from '../types';
 import { ASSET_TYPES } from '../constants';
 
 interface RequestsManagerProps {
@@ -21,6 +21,7 @@ interface RequestsManagerProps {
   onUpdateRequest: (req: EquipmentRequest) => Promise<void>;
   onRemoveRequest?: (id: string) => Promise<void>;
   assetTypeConfigs: AssetTypeConfig[];
+  legalEntities: LegalEntity[]; // Novo prop
 }
 
 const RequestsManager: React.FC<RequestsManagerProps> = ({ 
@@ -32,7 +33,8 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({
   onUpdateStatus, 
   onUpdateRequest, 
   onRemoveRequest,
-  assetTypeConfigs 
+  assetTypeConfigs,
+  legalEntities
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<EquipmentRequest | null>(null);
@@ -60,33 +62,61 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({
     const employee = getEmployee(req.employeeId);
     if (!employee) return;
 
+    // Busca dados da empresa vinculada
+    const company = legalEntities.find(l => l.id === employee.legalEntityId);
+
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
+    const logo = localStorage.getItem('assettrack_logo');
 
     // Cabeçalho
+    let headerY = 20;
+    if (logo) {
+       try {
+         doc.addImage(logo, 'PNG', 20, 10, 25, 25, undefined, 'FAST');
+         headerY = 25;
+       } catch (e) { console.error('Erro ao adicionar logo', e); }
+    }
+
+    // Dados da Empresa no Cabeçalho
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    if (company) {
+       doc.text(company.socialReason.toUpperCase(), 20, headerY + 5);
+       doc.setFont('helvetica', 'normal');
+       doc.text(`CNPJ: ${company.cnpj}`, 20, headerY + 9);
+       doc.text(company.address, 20, headerY + 13);
+       headerY += 20; // Ajusta espaçamento se houver dados da empresa
+    } else {
+       doc.text('EMPRESA NÃO VINCULADA', 20, headerY + 5);
+       headerY += 15;
+    }
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
-    doc.text('TERMO DE RESPONSABILIDADE E ENTREGA', pageWidth / 2, 20, { align: 'center' });
+    doc.text('TERMO DE RESPONSABILIDADE E ENTREGA', pageWidth / 2, headerY, { align: 'center' });
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Protocolo: ${req.id}`, pageWidth - 20, 30, { align: 'right' });
-    doc.text(`Data: ${new Date(req.createdAt).toLocaleDateString('pt-BR')}`, pageWidth - 20, 35, { align: 'right' });
+    doc.text(`Protocolo: ${req.id}`, pageWidth - 20, headerY + 10, { align: 'right' });
+    doc.text(`Data: ${new Date(req.createdAt).toLocaleDateString('pt-BR')}`, pageWidth - 20, headerY + 15, { align: 'right' });
 
     // Dados do Colaborador
+    const section1Y = headerY + 30;
     doc.setFont('helvetica', 'bold');
-    doc.text('1. IDENTIFICAÇÃO DO COLABORADOR', 20, 50);
-    doc.line(20, 52, pageWidth - 20, 52);
+    doc.text('1. IDENTIFICAÇÃO DO COLABORADOR', 20, section1Y);
+    doc.line(20, section1Y + 2, pageWidth - 20, section1Y + 2);
     
     doc.setFont('helvetica', 'normal');
-    doc.text(`Nome: ${employee.name}`, 20, 60);
-    doc.text(`CPF: ${employee.cpf}`, 20, 65);
-    doc.text(`Departamento: ${employee.sector} / ${employee.role}`, 20, 70);
+    doc.text(`Nome: ${employee.name}`, 20, section1Y + 10);
+    doc.text(`CPF: ${employee.cpf}`, 20, section1Y + 15);
+    doc.text(`Departamento: ${employee.sector} / ${employee.role}`, 20, section1Y + 20);
 
     // Lista de Equipamentos
+    const section2Y = section1Y + 35;
     doc.setFont('helvetica', 'bold');
-    doc.text('2. EQUIPAMENTOS ENTREGUES', 20, 85);
-    doc.line(20, 87, pageWidth - 20, 87);
+    doc.text('2. EQUIPAMENTOS ENTREGUES', 20, section2Y);
+    doc.line(20, section2Y + 2, pageWidth - 20, section2Y + 2);
 
     const tableData = (req.itemFulfillments || []).map(f => {
       const asset = assets.find(a => a.id === f.linkedAssetId);
@@ -100,7 +130,7 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({
     });
 
     (doc as any).autoTable({
-      startY: 92,
+      startY: section2Y + 7,
       head: [['Tipo', 'Marca', 'Modelo', 'Patrimônio', 'Série']],
       body: tableData,
       theme: 'grid',
@@ -115,7 +145,11 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({
     doc.text('3. DECLARAÇÃO DE RESPONSABILIDADE', 20, finalY);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    const text = `Declaro ter recebido os equipamentos acima descritos em perfeito estado de conservação e funcionamento, comprometendo-me a utilizá-los exclusivamente para fins profissionais de interesse da empresa. Assumo total responsabilidade pela guarda, conservação e integridade dos mesmos, ciente de que danos causados por uso indevido ou negligência poderão ser objeto de ressarcimento conforme legislação vigente. Em caso de desligamento, comprometo-me a devolver os itens imediatamente ao setor de TI.`;
+    
+    // Texto legal atualizado para citar a empresa
+    const companyName = company ? company.socialReason : "a empresa";
+    const text = `Declaro ter recebido os equipamentos acima descritos em perfeito estado de conservação e funcionamento, comprometendo-me a utilizá-los exclusivamente para fins profissionais de interesse de ${companyName}. Assumo total responsabilidade pela guarda, conservação e integridade dos mesmos, ciente de que danos causados por uso indevido ou negligência poderão ser objeto de ressarcimento conforme legislação vigente. Em caso de desligamento, comprometo-me a devolver os itens imediatamente ao setor de TI.`;
+    
     const splitText = doc.splitTextToSize(text, pageWidth - 40);
     doc.text(splitText, 20, finalY + 7);
 

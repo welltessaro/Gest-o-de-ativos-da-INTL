@@ -1,8 +1,8 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { Download, Database, ShieldCheck, Activity, Upload, Loader2, FileSpreadsheet, Trash2, AlertTriangle } from 'lucide-react';
-import { Asset, EquipmentRequest, Employee, Department, AssetTypeConfig, AccountingAccount, UserAccount } from '../types';
+import { Download, Database, ShieldCheck, Activity, Upload, Loader2, FileSpreadsheet, Trash2, AlertTriangle, MessageSquare, Save, CheckCircle2, Image as ImageIcon, X, Building2, Plus, Edit2 } from 'lucide-react';
+import { Asset, EquipmentRequest, Employee, Department, AssetTypeConfig, AccountingAccount, UserAccount, SystemIntegrationConfig, LegalEntity } from '../types';
 import { db } from '../services/supabase';
 
 interface SystemInfoManagerProps {
@@ -13,6 +13,10 @@ interface SystemInfoManagerProps {
   assetTypeConfigs: AssetTypeConfig[];
   accounts: AccountingAccount[];
   currentUser: UserAccount;
+  legalEntities: LegalEntity[];
+  onAddLegalEntity: (entity: LegalEntity) => void;
+  onUpdateLegalEntity: (entity: LegalEntity) => void;
+  onRemoveLegalEntity: (id: string) => void;
 }
 
 const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({ 
@@ -22,11 +26,81 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
   departments,
   assetTypeConfigs,
   accounts,
-  currentUser
+  currentUser,
+  legalEntities,
+  onAddLegalEntity,
+  onUpdateLegalEntity,
+  onRemoveLegalEntity
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  
+  // States para Empresas
+  const [showEntityForm, setShowEntityForm] = useState(false);
+  const [editingEntity, setEditingEntity] = useState<LegalEntity | null>(null);
+  const [entityForm, setEntityForm] = useState<LegalEntity>({ id: '', socialReason: '', cnpj: '', address: '' });
+
+  // Integrações
+  const [telegramConfig, setTelegramConfig] = useState<SystemIntegrationConfig>({
+    telegramBotToken: '',
+    telegramChatId: ''
+  });
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [showConfigSuccess, setShowConfigSuccess] = useState(false);
+
+  useEffect(() => {
+    const storedIntegration = localStorage.getItem('assettrack_integrations');
+    if (storedIntegration) {
+      setTelegramConfig(JSON.parse(storedIntegration));
+    }
+    const storedLogo = localStorage.getItem('assettrack_logo');
+    if (storedLogo) {
+      setLogoPreview(storedLogo);
+    }
+  }, []);
+
+  const handleSaveIntegrations = () => {
+    localStorage.setItem('assettrack_integrations', JSON.stringify(telegramConfig));
+    setShowConfigSuccess(true);
+    setTimeout(() => setShowConfigSuccess(false), 3000);
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        setLogoPreview(base64);
+        localStorage.setItem('assettrack_logo', base64);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoPreview(null);
+    localStorage.removeItem('assettrack_logo');
+  };
+
+  // --- ENTIDADES LEGAIS ---
+  const handleOpenEntityForm = (entity: LegalEntity | null = null) => {
+    setEditingEntity(entity);
+    setEntityForm(entity || { id: '', socialReason: '', cnpj: '', address: '' });
+    setShowEntityForm(true);
+  };
+
+  const handleSaveEntity = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingEntity) {
+      onUpdateLegalEntity(entityForm);
+    } else {
+      onAddLegalEntity({ ...entityForm, id: `LEG-${Date.now()}` });
+    }
+    setShowEntityForm(false);
+  };
   
   // --- LÓGICA DE EXPORTAÇÃO (XLSX) ---
   const handleExportSystemData = () => {
@@ -46,7 +120,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
           'ID Patrimonial': a.id,
           'Etiqueta (Tag)': a.tagId,
           'Tipo': a.type,
-          'Código da Conta': account?.code || '', // Adicionado: Código Contábil
+          'Código da Conta': account?.code || '', 
           'Classificação Contábil (Nome)': account?.name || '',
           'Class. Tipo': account?.type || 'Ativo',
           'Centro Custo Class.': account?.costCenter || '',
@@ -71,11 +145,13 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
       const employeeData = employees.map(e => {
         const dept = departments.find(d => d.id === e.departmentId);
         const assetCount = assets.filter(a => a.assignedTo === e.id).length;
+        const legal = legalEntities.find(l => l.id === e.legalEntityId);
         return {
           'Nome': e.name,
           'CPF': e.cpf,
           'Cargo/Função': e.role,
           'Setor/Departamento': dept?.name || e.sector,
+          'Empresa': legal?.socialReason || 'N/A',
           'Status Cadastro': e.isActive === false ? 'Inativo' : 'Ativo',
           'Qtd Ativos em Posse': assetCount
         };
@@ -137,13 +213,10 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
         const accountCodeMap = new Map<string, string>(accounts.map(c => [c.code.trim(), c.id])); // Mapa por Código
         const typeConfigMap = new Map<string, AssetTypeConfig>(assetTypeConfigs.map(t => [t.name.toLowerCase().trim(), t]));
 
-        // Helper para converter valor monetário string (pt-BR) para number
         const parseCurrency = (val: any): number => {
           if (typeof val === 'number') return val;
           if (typeof val === 'string') {
             let s = val.replace('R$', '').trim();
-            // Lógica simples: se tem virgula e ponto, assume formato 1.000,00
-            // Se só tem virgula, assume decimal (1000,00)
             if (s.includes(',') && s.includes('.')) {
               s = s.replace(/\./g, '').replace(',', '.');
             } else if (s.includes(',')) {
@@ -158,7 +231,6 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
         let deptMap = new Map<string, string>(); 
         const wsDepts = wb.Sheets["Departamentos"];
         if (wsDepts) {
-          // raw: false força leitura como string (texto exibido), preservando formatação
           const data: any[] = XLSX.utils.sheet_to_json(wsDepts, { raw: false });
           for (const row of data) {
             const id = row['ID'] || `DEPT-${Math.floor(Math.random() * 100000)}`;
@@ -212,24 +284,20 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
         const wsAssets = wb.Sheets["Inventário Ativos"];
         let importedAssetsCount = 0;
         if (wsAssets) {
-          // raw: false garante que 'Código da Conta' seja lido como Texto ("001" permanece "001")
           const data: any[] = XLSX.utils.sheet_to_json(wsAssets, { raw: false });
           for (const row of data) {
             const id = row['ID Patrimonial'];
             if (id) {
-              // --- TRATAMENTO DE CLASSIFICAÇÃO CONTÁBIL ---
               const typeName = (row['Tipo'] || 'Outros').trim();
               const classificationName = (row['Classificação Contábil (Nome)'] || '').trim();
               const classificationCode = (row['Código da Conta'] ? String(row['Código da Conta']) : '').trim();
               
               let accountId: string | undefined = undefined;
 
-              // 1. Tenta resolver ou criar a Conta Contábil (Plano de Contas)
               if (classificationCode && classificationName) {
                  if (accountCodeMap.has(classificationCode)) {
                     accountId = accountCodeMap.get(classificationCode);
                  } else {
-                    // CRIA NOVA CONTA SE NÃO EXISTIR NA BASE
                     const newAccountId = `ACC-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
                     const newAccount: AccountingAccount = {
                        id: newAccountId,
@@ -239,26 +307,18 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
                        costCenter: row['Centro Custo Class.'] || ''
                     };
                     await db.accountingAccounts.upsert(newAccount);
-                    
-                    // Atualiza mapas locais para que as próximas linhas usem a conta criada
                     accountCodeMap.set(classificationCode, newAccountId);
                     accountId = newAccountId;
                  }
               } else if (classificationCode) {
-                 // Se só tem código, tenta achar na base
                  accountId = accountCodeMap.get(classificationCode);
               } else if (classificationName) {
-                 // Se só tem nome, tenta achar na base
                  accountId = accountNameMap.get(classificationName.toLowerCase());
               }
               
-              // 2. Atualiza/Cria Configuração do Tipo de Ativo e Vínculo
               if (typeName) {
                 const typeKey = typeName.toLowerCase();
                 const existingConfig = typeConfigMap.get(typeKey);
-                
-                // Se já existe config, mas achamos um accountId novo via planilha, atualizamos
-                // Se não existe, criamos um novo Tipo de Ativo
                 
                 if (!existingConfig) {
                   const newConfig: AssetTypeConfig = {
@@ -269,14 +329,12 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
                   await db.assetTypeConfigs.upsert(newConfig);
                   typeConfigMap.set(typeKey, newConfig); 
                 } else if (accountId && existingConfig.accountId !== accountId) {
-                  // Atualiza vínculo se mudou na planilha
                   const updatedConfig: AssetTypeConfig = { ...existingConfig, accountId };
                   await db.assetTypeConfigs.upsert(updatedConfig);
                   typeConfigMap.set(typeKey, updatedConfig);
                 }
               }
 
-              // --- TRATAMENTO DO ATIVO ---
               const empName = row['Responsável Atual'];
               const assignedTo = empMap.get(empName) || undefined; 
               
@@ -333,13 +391,12 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
           }
         }
 
-        alert(`Importação concluída com sucesso!\n\nDados Processados:\n- Departamentos Sincronizados\n- Colaboradores Sincronizados\n- ${importedAssetsCount} Ativos Processados\n- Tipos de Ativo & Contas Atualizados\n\nRecarregue a página para visualizar todas as alterações.`);
-        
+        alert(`Importação concluída com sucesso!\n\n${importedAssetsCount} Ativos Processados.`);
         if (fileInputRef.current) fileInputRef.current.value = '';
 
       } catch (error) {
         console.error("Erro na importação:", error);
-        alert("Erro crítico ao processar o arquivo. Verifique se o formato segue o modelo de exportação padrão.");
+        alert("Erro crítico ao processar o arquivo.");
       } finally {
         setIsImporting(false);
       }
@@ -349,50 +406,28 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
 
   // --- LÓGICA DE LIMPEZA TOTAL ---
   const handleClearDatabase = async () => {
-    if (!confirm("ATENÇÃO: TEM CERTEZA QUE DESEJA APAGAR TODOS OS DADOS?\n\nEssa ação é irreversível e excluirá todos os ativos, colaboradores, departamentos e histórico do sistema.")) {
-      return;
-    }
-    
-    // Segunda confirmação para evitar acidentes
-    if (!confirm("ÚLTIMO AVISO: Isso limpará todo o banco de dados para testes. Confirmar exclusão total?")) {
-      return;
-    }
+    if (!confirm("ATENÇÃO: TEM CERTEZA QUE DESEJA APAGAR TODOS OS DADOS?")) return;
+    if (!confirm("ÚLTIMO AVISO: Isso limpará todo o banco de dados.")) return;
 
     setIsClearing(true);
     try {
-      // A ordem importa para evitar erros de Foreign Key (embora o ON DELETE SET NULL ajude, é melhor limpar dependentes primeiro)
-      
-      // 1. Auditorias e Requisições (Dependentes)
       await db.auditSessions.clearAll();
       await db.requests.clearAll();
-      
-      // 2. Notificações
       await db.notifications.clearAll();
-
-      // 3. Ativos (Vinculados a Depts e Emps)
       await db.assets.clearAll();
-
-      // 4. Usuários (Vinculados a Emps)
-      // Nota: Não podemos apagar o usuário atual da sessão Auth se estiver logado via Supabase Auth, 
-      // mas aqui estamos limpando a tabela 'users' pública da aplicação.
       await db.users.clearAll();
-
-      // 5. Colaboradores (Vinculados a Depts)
       await db.employees.clearAll();
-
-      // 6. Departamentos (Base)
       await db.departments.clearAll();
-      
-      // 7. Configurações Auxiliares (Opcional, mas bom para reset total)
       await db.assetTypeConfigs.clearAll();
       await db.accountingAccounts.clearAll();
+      await db.legalEntities.clearAll();
 
-      alert("Limpeza do sistema concluída com sucesso! A página será recarregada.");
+      alert("Limpeza do sistema concluída com sucesso!");
       window.location.reload();
 
     } catch (error: any) {
       console.error("Erro ao limpar banco:", error);
-      alert("Ocorreu um erro ao tentar limpar o banco de dados. Verifique o console ou as permissões.");
+      alert("Ocorreu um erro ao tentar limpar o banco de dados.");
     } finally {
       setIsClearing(false);
     }
@@ -411,7 +446,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
            <div className="z-10">
               <h3 className="text-2xl font-black text-slate-900 tracking-tight">Exportação de Dados</h3>
               <p className="text-slate-500 font-medium mt-2 max-w-sm mx-auto text-sm">
-                Gere um arquivo Excel (.xlsx) completo para backup ou para editar dados em massa e reimportar.
+                Gere um arquivo Excel (.xlsx) completo para backup.
               </p>
            </div>
            <button 
@@ -432,7 +467,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
            <div className="z-10">
               <h3 className="text-2xl font-black text-slate-900 tracking-tight">Importação em Lote</h3>
               <p className="text-slate-500 font-medium mt-2 max-w-sm mx-auto text-sm">
-                Carregue a planilha preenchida para atualizar ou criar múltiplos registros de Ativos e Colaboradores.
+                Carregue a planilha para atualizar dados em massa.
               </p>
            </div>
            
@@ -456,7 +491,144 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
             {isImporting ? 'Processando...' : 'Carregar Planilha .XLSX'}
             {!isImporting && <FileSpreadsheet className="w-5 h-5" />}
           </button>
-          {isImporting && <p className="text-[10px] font-bold text-blue-600 animate-pulse">Isso pode levar alguns segundos...</p>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* CARD DADOS CORPORATIVOS */}
+        <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-xl relative overflow-hidden">
+           <div className="flex flex-col h-full relative z-10">
+              <div className="flex items-center gap-6 mb-6">
+                 <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center shadow-lg shrink-0">
+                    <Building2 className="w-8 h-8 text-white" />
+                 </div>
+                 <div>
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Dados Corporativos</h3>
+                    <p className="text-slate-500 font-medium mt-1 text-sm">Empresas e Filiais para Relatórios.</p>
+                 </div>
+              </div>
+
+              <div className="flex-1 space-y-3 max-h-60 overflow-y-auto custom-scrollbar mb-4">
+                 {legalEntities.map(entity => (
+                   <div key={entity.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex justify-between items-center group">
+                      <div>
+                         <p className="text-xs font-black text-slate-800">{entity.socialReason}</p>
+                         <p className="text-[10px] text-slate-500 font-mono">CNPJ: {entity.cnpj}</p>
+                         <p className="text-[10px] text-slate-400 truncate max-w-[200px]">{entity.address}</p>
+                      </div>
+                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <button onClick={() => handleOpenEntityForm(entity)} className="p-2 bg-white rounded-xl text-blue-600 hover:bg-blue-50">
+                            <Edit2 className="w-4 h-4" />
+                         </button>
+                         <button onClick={() => { if(confirm('Remover esta empresa?')) onRemoveLegalEntity(entity.id); }} className="p-2 bg-white rounded-xl text-rose-600 hover:bg-rose-50">
+                            <Trash2 className="w-4 h-4" />
+                         </button>
+                      </div>
+                   </div>
+                 ))}
+                 {legalEntities.length === 0 && <p className="text-center text-slate-400 text-xs py-4">Nenhuma empresa cadastrada.</p>}
+              </div>
+
+              <button 
+                onClick={() => handleOpenEntityForm()}
+                className="w-full bg-slate-900 hover:bg-black text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 shadow-lg transition-all"
+              >
+                <Plus className="w-4 h-4" /> Cadastrar Nova Empresa
+              </button>
+           </div>
+        </div>
+
+        <div className="flex flex-col gap-8">
+          {/* CARD IDENTIDADE VISUAL */}
+          <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-xl relative overflow-hidden flex-1">
+             <div className="flex items-start gap-6 relative z-10 h-full">
+                <div className="w-16 h-16 bg-purple-500 rounded-2xl flex items-center justify-center shadow-lg shrink-0">
+                   <ImageIcon className="w-8 h-8 text-white" />
+                </div>
+                <div className="flex-1 flex flex-col h-full">
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tight">Identidade Visual</h3>
+                   <p className="text-slate-500 font-medium mt-1 text-sm">
+                     Logo para relatórios PDF e etiquetas.
+                   </p>
+                   
+                   <div className="mt-6 flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50/50 min-h-[100px]">
+                      {logoPreview ? (
+                        <div className="relative group">
+                          <img src={logoPreview} alt="Logo Empresa" className="h-20 object-contain" />
+                          <button 
+                            onClick={handleRemoveLogo}
+                            className="absolute -top-2 -right-2 bg-rose-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-center text-slate-400">
+                          <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-xs font-bold">Nenhum logo</p>
+                        </div>
+                      )}
+                   </div>
+
+                   <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      ref={logoInputRef}
+                      onChange={handleLogoUpload}
+                   />
+
+                   <div className="mt-4">
+                      <button 
+                        onClick={() => logoInputRef.current?.click()}
+                        className="w-full bg-purple-500 hover:bg-purple-600 text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 shadow-lg shadow-purple-200 transition-all active:scale-95"
+                      >
+                        <Upload className="w-4 h-4" /> Carregar Imagem
+                      </button>
+                   </div>
+                </div>
+             </div>
+          </div>
+
+          {/* CARD INTEGRAÇÕES */}
+          <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl relative overflow-hidden flex-1">
+             <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 bg-sky-500 rounded-xl flex items-center justify-center shadow-lg shrink-0">
+                   <MessageSquare className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">Notificações</h3>
+             </div>
+             
+             <div className="space-y-3">
+                <div className="space-y-1">
+                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Bot Token</label>
+                   <input 
+                     type="password"
+                     className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-sky-500 text-xs" 
+                     value={telegramConfig.telegramBotToken}
+                     onChange={e => setTelegramConfig({...telegramConfig, telegramBotToken: e.target.value})}
+                   />
+                </div>
+                <div className="space-y-1">
+                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Chat ID</label>
+                   <input 
+                     className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none focus:ring-2 focus:ring-sky-500 text-xs" 
+                     value={telegramConfig.telegramChatId}
+                     onChange={e => setTelegramConfig({...telegramConfig, telegramChatId: e.target.value})}
+                   />
+                </div>
+             </div>
+
+             <div className="mt-4 flex items-center gap-3">
+                <button 
+                  onClick={handleSaveIntegrations}
+                  className="bg-sky-500 hover:bg-sky-600 text-white px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center gap-2 shadow-lg shadow-sky-200 transition-all active:scale-95 w-full justify-center"
+                >
+                  <Save className="w-4 h-4" /> Salvar Config
+                </button>
+                {showConfigSuccess && <CheckCircle2 className="w-5 h-5 text-emerald-500 animate-in fade-in" />}
+             </div>
+          </div>
         </div>
       </div>
 
@@ -524,8 +696,39 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
       </div>
       )}
 
+      {/* MODAL FORM LEGAL ENTITY */}
+      {showEntityForm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+           <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
+              <div className="flex justify-between items-center mb-6">
+                 <h3 className="text-xl font-black text-slate-900">
+                    {editingEntity ? 'Editar Empresa' : 'Nova Empresa/Filial'}
+                 </h3>
+                 <button onClick={() => setShowEntityForm(false)} className="p-2 hover:bg-slate-100 rounded-full"><X className="w-6 h-6" /></button>
+              </div>
+              <form onSubmit={handleSaveEntity} className="space-y-4">
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razão Social</label>
+                    <input className="w-full p-4 rounded-2xl border border-slate-200 font-bold" value={entityForm.socialReason} onChange={e => setEntityForm({...entityForm, socialReason: e.target.value})} required placeholder="Ex: Minha Empresa Ltda" />
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CNPJ</label>
+                    <input className="w-full p-4 rounded-2xl border border-slate-200 font-bold" value={entityForm.cnpj} onChange={e => setEntityForm({...entityForm, cnpj: e.target.value})} required placeholder="00.000.000/0001-00" />
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço Completo</label>
+                    <textarea className="w-full p-4 rounded-2xl border border-slate-200 font-bold h-24" value={entityForm.address} onChange={e => setEntityForm({...entityForm, address: e.target.value})} required placeholder="Rua, Número, Bairro, Cidade - UF" />
+                 </div>
+                 <button type="submit" className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl uppercase tracking-widest text-xs mt-4">
+                    Salvar Dados
+                 </button>
+              </form>
+           </div>
+        </div>
+      )}
+
       <div className="text-center py-10 opacity-50">
-         <p className="text-xs font-black uppercase tracking-widest text-slate-400">AssetTrack Pro Enterprise v2.7</p>
+         <p className="text-xs font-black uppercase tracking-widest text-slate-400">AssetTrack Pro Enterprise v2.8</p>
          <p className="text-[10px] text-slate-400 mt-1">Módulo de Importação/Exportação Avançado</p>
       </div>
 

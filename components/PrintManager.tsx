@@ -81,9 +81,9 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets }) => {
   const handleExportPdf = () => {
     setExporting('PDF');
     const selectedAssets = assets.filter(a => selectedAssetIds.includes(a.id));
+    const logo = localStorage.getItem('assettrack_logo');
     
     // Geramos um documento HTML altamente estilizado que atua como o "PDF" das etiquetas
-    // NOTA: A tag script de fechamento foi escapada para evitar SyntaxError no navegador
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -104,6 +104,13 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets }) => {
             text-align: center;
             page-break-inside: avoid;
             background: white;
+            position: relative;
+          }
+          .company-logo {
+            max-height: 20px;
+            max-width: 80px;
+            margin-bottom: 5px;
+            object-fit: contain;
           }
           .company-name {
             font-size: 10px;
@@ -140,7 +147,7 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets }) => {
       <body>
         ${selectedAssets.map(a => `
           <div class="label-card">
-            <div class="company-name">AssetTrack Pro</div>
+            ${logo ? `<img src="${logo}" class="company-logo" />` : `<div class="company-name">AssetTrack Pro</div>`}
             <div class="qr-placeholder">[QR: ${a.qrCode}]</div>
             <div class="inventory-id">${a.id}</div>
             <div class="footer">${a.brand} - ${a.type}</div>
@@ -296,7 +303,11 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets }) => {
                 <div className="bg-white p-4 rounded-3xl shadow-2xl shadow-blue-500/10 print:shadow-none print:border-2 print:border-black">
                    <div className="border-[1.5px] border-slate-900 p-3 rounded-2xl flex flex-col items-center gap-4">
                       <div className="text-center">
-                         <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none mb-1 print:text-black">AssetTrack Pro</p>
+                         {localStorage.getItem('assettrack_logo') ? (
+                           <img src={localStorage.getItem('assettrack_logo')!} alt="Logo" className="h-6 object-contain mb-1" />
+                         ) : (
+                           <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none mb-1 print:text-black">AssetTrack Pro</p>
+                         )}
                       </div>
                       <QrCode className="w-32 h-32 text-slate-900" />
                       <div className="w-full h-[1px] bg-slate-200" />
@@ -346,7 +357,11 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets }) => {
         <div className="flex flex-wrap gap-4 p-4">
           {assets.filter(a => selectedAssetIds.includes(a.id)).map(a => (
             <div key={a.id} className="page-break-after-always flex flex-col items-center justify-center border-2 border-black p-4 w-[4cm] h-[4cm] text-black bg-white">
-               <p className="text-[10px] font-black text-blue-600 uppercase mb-1">AssetTrack Pro</p>
+               {localStorage.getItem('assettrack_logo') ? (
+                 <img src={localStorage.getItem('assettrack_logo')!} alt="Logo" className="h-5 object-contain mb-1" />
+               ) : (
+                 <p className="text-[10px] font-black text-blue-600 uppercase mb-1">AssetTrack Pro</p>
+               )}
                <QrCode className="w-24 h-24 mb-2" />
                <p className="text-[8px] font-bold uppercase text-slate-500">Patrimônio</p>
                <p className="text-lg font-mono font-black leading-none">{a.id}</p>

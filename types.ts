@@ -19,6 +19,14 @@ export interface Department {
   createdAt: string;
 }
 
+// Nova Interface para Dados da Empresa
+export interface LegalEntity {
+  id: string;
+  socialReason: string; // Razão Social
+  cnpj: string;
+  address: string;
+}
+
 // Estrutura Unificada
 export interface AccountingAccount {
   id: string;
@@ -69,6 +77,7 @@ export interface Employee {
   role: string;
   cpf: string;
   isActive?: boolean;
+  legalEntityId?: string; // Vínculo com a empresa/filial
 }
 
 export type AppModule = 
@@ -93,6 +102,9 @@ export interface UserAccount {
   sector: string;
   modules: AppModule[];
   employeeId?: string;
+  // Segregação de Funções Financeiras
+  canApprovePurchase?: boolean; // Permissão nível Diretoria (Autorizar Pedido)
+  canExecutePurchase?: boolean; // Permissão nível Financeiro (Realizar Pagamento)
 }
 
 export interface AppNotification {
@@ -150,4 +162,11 @@ export interface AuditSession {
   entries: AuditEntry[];
   isFinished: boolean;
   generatedRequestId?: string;
+}
+
+// Configurações de Integração
+export interface SystemIntegrationConfig {
+  telegramBotToken?: string;
+  telegramChatId?: string;
+  companyLogo?: string; // Base64 string do logo
 }

@@ -17,8 +17,17 @@ DROP TABLE IF EXISTS public.asset_type_configs CASCADE;
 DROP TABLE IF EXISTS public.accounting_accounts CASCADE;
 DROP TABLE IF EXISTS public.employees CASCADE;
 DROP TABLE IF EXISTS public.departments CASCADE;
+DROP TABLE IF EXISTS public.legal_entities CASCADE;
 
 -- 2. CRIAÇÃO DAS TABELAS (CREATE TABLES)
+
+-- 2.0 Entidades Legais (Empresas/Filiais)
+CREATE TABLE public.legal_entities (
+    id TEXT PRIMARY KEY,
+    "socialReason" TEXT NOT NULL, -- Razão Social
+    cnpj TEXT,
+    address TEXT
+);
 
 -- 2.1 Departamentos
 CREATE TABLE public.departments (
@@ -32,6 +41,7 @@ CREATE TABLE public.departments (
 CREATE TABLE public.employees (
     id TEXT PRIMARY KEY,
     "departmentId" TEXT REFERENCES public.departments(id) ON DELETE SET NULL,
+    "legalEntityId" TEXT REFERENCES public.legal_entities(id) ON DELETE SET NULL, -- Vínculo Empresa
     name TEXT NOT NULL,
     sector TEXT,
     role TEXT,
@@ -94,7 +104,9 @@ CREATE TABLE public.users (
     password TEXT,
     sector TEXT,
     modules TEXT[], -- Array de strings com os módulos permitidos
-    "employeeId" TEXT REFERENCES public.employees(id) ON DELETE SET NULL
+    "employeeId" TEXT REFERENCES public.employees(id) ON DELETE SET NULL,
+    "canApprovePurchase" BOOLEAN DEFAULT FALSE,
+    "canExecutePurchase" BOOLEAN DEFAULT FALSE
 );
 
 -- 2.7 Requisições e Pedidos
@@ -135,6 +147,7 @@ CREATE TABLE public.audit_sessions (
 CREATE INDEX idx_assets_department ON public.assets("departmentId");
 CREATE INDEX idx_assets_assigned ON public.assets("assignedTo");
 CREATE INDEX idx_employees_department ON public.employees("departmentId");
+CREATE INDEX idx_employees_legal ON public.employees("legalEntityId");
 CREATE INDEX idx_requests_employee ON public.requests("employeeId");
 CREATE INDEX idx_asset_configs_account ON public.asset_type_configs("accountId");
 CREATE INDEX idx_users_username ON public.users(username);
@@ -142,6 +155,7 @@ CREATE INDEX idx_users_username ON public.users(username);
 -- 4. CONFIGURAÇÃO DE SEGURANÇA (ROW LEVEL SECURITY - RLS)
 
 -- Habilita RLS em todas as tabelas
+ALTER TABLE public.legal_entities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.accounting_accounts ENABLE ROW LEVEL SECURITY;
@@ -153,9 +167,7 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_sessions ENABLE ROW LEVEL SECURITY;
 
 -- Cria política de ACESSO TOTAL para a API (Anon/Authenticated/ServiceRole)
--- Como a autenticação é gerenciada via tabela 'users' na aplicação, o banco
--- deve permitir operações CRUD completas para a chave de API configurada.
-
+CREATE POLICY "Enable All Access" ON public.legal_entities FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable All Access" ON public.departments FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable All Access" ON public.employees FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable All Access" ON public.accounting_accounts FOR ALL USING (true) WITH CHECK (true);

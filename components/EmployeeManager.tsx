@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { Users, Plus, Search, Trash2, Edit2, Building2, X, Package, Shield, FileText } from 'lucide-react';
-import { Employee, Department, Asset, UserAccount, EquipmentRequest } from '../types';
+import { Users, Plus, Search, Trash2, Edit2, Building2, X, Package, Shield, FileText, Briefcase } from 'lucide-react';
+import { Employee, Department, Asset, UserAccount, EquipmentRequest, LegalEntity } from '../types';
 
 interface EmployeeManagerProps {
   employees: Employee[];
@@ -9,23 +9,24 @@ interface EmployeeManagerProps {
   assets: Asset[];
   users: UserAccount[];
   requests: EquipmentRequest[];
+  legalEntities: LegalEntity[]; // Novo prop
   onAdd: (employee: Omit<Employee, 'id'>) => void;
   onUpdate: (employee: Employee) => void;
   onRemove: (id: string) => void;
 }
 
-const EmployeeManager: React.FC<EmployeeManagerProps> = ({ employees, departments, assets, users, requests, onAdd, onUpdate, onRemove }) => {
+const EmployeeManager: React.FC<EmployeeManagerProps> = ({ employees, departments, assets, users, requests, legalEntities, onAdd, onUpdate, onRemove }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
   const [formData, setFormData] = useState<Omit<Employee, 'id'>>({
-    name: '', sector: '', role: '', cpf: '', departmentId: ''
+    name: '', sector: '', role: '', cpf: '', departmentId: '', legalEntityId: ''
   });
 
   const handleOpenCreate = () => {
     setEditingEmployee(null);
-    setFormData({ name: '', sector: '', role: '', cpf: '', departmentId: '' });
+    setFormData({ name: '', sector: '', role: '', cpf: '', departmentId: '', legalEntityId: '' });
     setShowForm(true);
   };
 
@@ -36,7 +37,8 @@ const EmployeeManager: React.FC<EmployeeManagerProps> = ({ employees, department
       sector: emp.sector,
       role: emp.role,
       cpf: emp.cpf,
-      departmentId: emp.departmentId
+      departmentId: emp.departmentId,
+      legalEntityId: emp.legalEntityId || ''
     });
     setShowForm(true);
   };
@@ -48,7 +50,11 @@ const EmployeeManager: React.FC<EmployeeManagerProps> = ({ employees, department
       return;
     }
     const selectedDept = departments.find(d => d.id === formData.departmentId);
-    const finalData = { ...formData, sector: selectedDept?.name || 'Geral' };
+    const finalData = { 
+      ...formData, 
+      sector: selectedDept?.name || 'Geral',
+      legalEntityId: formData.legalEntityId || undefined
+    };
     if (editingEmployee) onUpdate({ ...finalData, id: editingEmployee.id });
     else onAdd(finalData);
     setShowForm(false);
@@ -56,6 +62,7 @@ const EmployeeManager: React.FC<EmployeeManagerProps> = ({ employees, department
   };
 
   const getDepartmentName = (id: string) => departments.find(d => d.id === id)?.name || 'N/A';
+  const getEntityName = (id?: string) => legalEntities.find(l => l.id === id)?.socialReason || '-';
 
   const filteredEmployees = employees.filter(emp => 
     emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -91,7 +98,7 @@ const EmployeeManager: React.FC<EmployeeManagerProps> = ({ employees, department
             <tr>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Nome</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-center">Vínculos</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Departamento</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Empresa / Depto</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Função</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-right">Ações</th>
             </tr>
@@ -112,7 +119,6 @@ const EmployeeManager: React.FC<EmployeeManagerProps> = ({ employees, department
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-3">
-                      {/* Fix: Wrapped Lucide icons in spans to support the title attribute for tooltips and resolve TS errors */}
                       <span title={hasAssets ? "Possui Ativos" : "Sem Ativos"}>
                         <Package className={`w-4 h-4 ${hasAssets ? 'text-blue-500' : 'text-slate-200'}`} />
                       </span>
@@ -125,7 +131,10 @@ const EmployeeManager: React.FC<EmployeeManagerProps> = ({ employees, department
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-slate-700 font-bold">{getDepartmentName(emp.departmentId)}</span>
+                    <div className="flex flex-col">
+                       <span className="text-xs font-black text-slate-700">{getEntityName(emp.legalEntityId)}</span>
+                       <span className="text-[10px] font-bold text-slate-500 uppercase">{getDepartmentName(emp.departmentId)}</span>
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-slate-600 font-medium">{emp.role}</td>
                   <td className="px-6 py-4 text-right">
@@ -162,7 +171,7 @@ const EmployeeManager: React.FC<EmployeeManagerProps> = ({ employees, department
 
       {showForm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto custom-scrollbar">
             <div className="flex justify-between items-center mb-8">
               <h3 className="text-2xl font-black text-slate-800 flex items-center gap-2">
                 <Users className="w-7 h-7 text-blue-600" />
@@ -180,6 +189,18 @@ const EmployeeManager: React.FC<EmployeeManagerProps> = ({ employees, department
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CPF</label>
                 <input className="w-full p-4 rounded-2xl border border-slate-200 bg-white outline-none font-bold" placeholder="000.000.000-00" value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} required />
               </div>
+              
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Empresa / Filial (Vínculo Legal)</label>
+                <div className="relative">
+                   <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                   <select className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 bg-white outline-none font-bold appearance-none" value={formData.legalEntityId} onChange={e => setFormData({...formData, legalEntityId: e.target.value})}>
+                     <option value="">Selecione a empresa...</option>
+                     {legalEntities.map(l => <option key={l.id} value={l.id}>{l.socialReason} ({l.cnpj})</option>)}
+                   </select>
+                </div>
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Departamento</label>
                 <div className="relative">
@@ -204,6 +225,10 @@ const EmployeeManager: React.FC<EmployeeManagerProps> = ({ employees, department
           </div>
         </div>
       )}
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+      `}</style>
     </div>
   );
 };

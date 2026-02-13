@@ -25,9 +25,11 @@ import {
   ExternalLink,
   Loader2,
   Clock,
-  Ban
+  Ban,
+  Lock,
+  PenTool
 } from 'lucide-react';
-import { EquipmentRequest, Employee, ItemFulfillment, Quotation, Asset, HistoryEntry, AssetType, AssetTypeConfig } from '../types';
+import { EquipmentRequest, Employee, ItemFulfillment, Quotation, Asset, HistoryEntry, AssetType, AssetTypeConfig, UserAccount } from '../types';
 import { ASSET_TYPES } from '../constants';
 
 interface PurchaseOrderManagerProps {
@@ -37,6 +39,7 @@ interface PurchaseOrderManagerProps {
   onAssetCreated: (asset: Omit<Asset, 'id' | 'createdAt' | 'qrCode' | 'history'> & { id?: string; history?: HistoryEntry[] }) => Promise<void>;
   onAddRequest: (req: Omit<EquipmentRequest, 'id' | 'createdAt' | 'status'>) => Promise<void>;
   assetTypeConfigs: AssetTypeConfig[];
+  currentUser: UserAccount;
 }
 
 const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ 
@@ -45,7 +48,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
   onUpdateRequest, 
   onAssetCreated, 
   onAddRequest,
-  assetTypeConfigs 
+  assetTypeConfigs,
+  currentUser
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('Todos');
@@ -54,6 +58,11 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
   const [showReceiptForm, setShowReceiptForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // VERIFICAÇÃO DE PERMISSÕES (SEGREGAÇÃO DE FUNÇÃO)
+  // Admin sempre tem todas as permissões
+  const isApprover = currentUser.username === 'admin' || !!currentUser.canApprovePurchase;
+  const isBuyer = currentUser.username === 'admin' || !!currentUser.canExecutePurchase;
+
   const [newDirectOrder, setNewDirectOrder] = useState({
     type: 'Notebook' as AssetType,
     observation: ''
@@ -65,7 +74,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
     id: '',
     serialNumber: '',
     observations: '',
-    purchaseValue: undefined // Alterado para undefined (opcional)
+    purchaseValue: undefined 
   });
 
   const currentRequest = useMemo(() => {
@@ -130,6 +139,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
   };
 
   const handleAuthorizeOrder = async () => {
+    if (!isApprover) {
+       alert("Acesso Negado: Apenas perfis com permissão de APROVAÇÃO (Diretoria/Gestão) podem autorizar a compra.");
+       return;
+    }
     if (!currentRequest || activeSelection === null) return;
     const newFulfillments = [...(currentRequest.itemFulfillments || [])];
     newFulfillments[activeSelection.fIndex] = { 
@@ -140,6 +153,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
   };
 
   const handleDenyOrder = async () => {
+    if (!isApprover) {
+       alert("Acesso Negado: Apenas perfis com permissão de APROVAÇÃO podem negar pedidos.");
+       return;
+    }
     if (!currentRequest || activeSelection === null) return;
     if (!window.confirm("ATENÇÃO: Deseja realmente NEGAR e encerrar este pedido de compra?")) return;
 
@@ -153,6 +170,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
   };
 
   const handleSetComprado = async (requestId: string, fIndex: number) => {
+    if (!isBuyer) {
+       alert("Acesso Negado: Apenas perfis com permissão de COMPRA (Financeiro/Compras) podem confirmar pagamentos.");
+       return;
+    }
     const req = requests.find(r => r.id === requestId);
     if (!req) return;
     const newFulfillments = [...(req.itemFulfillments || [])];
@@ -179,7 +200,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
       serialNumber: '',
       observations: `Item recebido via Pedido de Compra referente à requisição ${currentRequest?.id}`,
       type: currentFulfillment.type,
-      purchaseValue: priceFromQuotation // Sugere o valor da cotação, mas agora será editável
+      purchaseValue: priceFromQuotation 
     });
     setShowReceiptForm(true);
   };
@@ -422,7 +443,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                     <ShieldCheck className="w-5 h-5 text-blue-600" />
                     <h4 className="text-sm font-black uppercase tracking-widest text-slate-800">Aprovação da Diretoria</h4>
                   </div>
-                  <div className="bg-blue-600 rounded-[2.5rem] p-8 text-white shadow-xl">
+                  <div className={`rounded-[2.5rem] p-8 text-white shadow-xl ${isApprover ? 'bg-blue-600' : 'bg-slate-400'}`}>
                      <p className="text-[10px] font-black uppercase opacity-70 mb-4 tracking-widest">Fornecedor Selecionado</p>
                      <div className="flex items-center justify-between mb-8">
                         <div>
@@ -439,16 +460,26 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                           <ExternalLink className="w-6 h-6" />
                         </a>
                      </div>
+                     
+                     {!isApprover && (
+                        <div className="bg-white/20 p-4 rounded-xl flex items-center gap-3 mb-4">
+                           <Lock className="w-5 h-5 text-white" />
+                           <span className="text-xs font-bold">Requer permissão de APROVADOR para prosseguir.</span>
+                        </div>
+                     )}
+
                      <div className="flex gap-4">
                         <button 
                           onClick={handleDenyOrder}
-                          className="flex-1 bg-white/20 text-white hover:bg-white hover:text-rose-600 font-black py-5 rounded-[2rem] uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all"
+                          disabled={!isApprover}
+                          className="flex-1 bg-white/20 text-white hover:bg-white hover:text-rose-600 font-black py-5 rounded-[2rem] uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <Ban className="w-5 h-5" /> Negar Pedido
+                          <Ban className="w-5 h-5" /> Negar
                         </button>
                         <button 
                           onClick={handleAuthorizeOrder}
-                          className="flex-[2] bg-white text-blue-600 font-black py-5 rounded-[2rem] uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all"
+                          disabled={!isApprover}
+                          className="flex-[2] bg-white text-blue-600 font-black py-5 rounded-[2rem] uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <CheckSquare className="w-5 h-5" /> Autorizar Pedido
                         </button>
@@ -464,11 +495,20 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                     <CreditCard className="w-5 h-5 text-indigo-600" />
                     <h4 className="text-sm font-black uppercase tracking-widest text-slate-800">Financeiro</h4>
                   </div>
-                  <div className="bg-indigo-600 rounded-[2.5rem] p-10 text-white shadow-xl text-center">
+                  <div className={`rounded-[2.5rem] p-10 text-white shadow-xl text-center ${isBuyer ? 'bg-indigo-600' : 'bg-slate-400'}`}>
                      <p className="text-sm font-bold mb-8">O pedido foi autorizado. Realize o pagamento e confirme o envio abaixo.</p>
+                     
+                     {!isBuyer && (
+                        <div className="bg-white/20 p-4 rounded-xl flex items-center justify-center gap-3 mb-8">
+                           <Lock className="w-5 h-5 text-white" />
+                           <span className="text-xs font-bold">Requer permissão de COMPRADOR para finalizar.</span>
+                        </div>
+                     )}
+
                      <button 
                       onClick={() => handleSetComprado(currentRequest.id, activeSelection.fIndex)}
-                      className="w-full bg-white text-indigo-600 font-black py-5 rounded-[2rem] shadow-xl uppercase tracking-widest text-xs flex items-center justify-center gap-3"
+                      disabled={!isBuyer}
+                      className="w-full bg-white text-indigo-600 font-black py-5 rounded-[2rem] shadow-xl uppercase tracking-widest text-xs flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
                      >
                         <Truck className="w-6 h-6" /> Confirmar Pagamento e Envio
                      </button>

@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   Asset, Department, Employee, EquipmentRequest, AuditSession, 
   UserAccount, AppNotification, AccountingAccount, 
-  AssetTypeConfig 
+  AssetTypeConfig, LegalEntity
 } from '../types';
 
 // Configuração da Conexão
@@ -120,6 +120,9 @@ export const db = {
 
   // 3. COLABORADORES
   employees: createTableManager<Employee>('employees', 'employees'),
+
+  // 3.1 ENTIDADES LEGAIS (EMPRESAS)
+  legalEntities: createTableManager<LegalEntity>('legal_entities', 'legal_entities'),
 
   // 4. REQUISIÇÕES
   requests: {

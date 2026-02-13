@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { Asset, HistoryEntry, Employee, Department, AppNotification, EquipmentRequest, AssetType, UserAccount } from '../types';
 import { ASSET_TYPES } from '../constants';
+import { sendMaintenanceAlert } from '../services/telegramService';
 
 interface MaintenanceManagerProps {
   assets: Asset[];
@@ -37,10 +38,19 @@ interface MaintenanceManagerProps {
   onAddRequest: (req: any) => Promise<void>;
 }
 
-const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employees, companies, currentUser, onUpdateAsset, onAddNotification, onAddRequest }) => {
+const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ 
+  assets, 
+  employees, 
+  companies, 
+  currentUser, 
+  onUpdateAsset, 
+  onAddNotification, 
+  onAddRequest 
+}) => {
   const [showModal, setShowModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [employeeFilter, setEmployeeFilter] = useState(''); // Novo estado para filtro de usuário
   
   const [selectedAssetId, setSelectedAssetId] = useState('');
   const [detailAsset, setDetailAsset] = useState<Asset | null>(null);
@@ -60,11 +70,15 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
     assets.filter(a => a.status !== 'Manutenção' && a.status !== 'Baixado')
   , [assets]);
 
-  const filteredAvailable = availableForMaintenance.filter(a => 
-    a.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    a.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    a.brand.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredAvailable = availableForMaintenance.filter(a => {
+    const matchesSearch = a.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          a.model.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          a.brand.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesEmployee = employeeFilter ? a.assignedTo === employeeFilter : true;
+
+    return matchesSearch && matchesEmployee;
+  });
 
   const handleOpenMaintenance = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,9 +105,14 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
       };
 
       await onUpdateAsset(updatedAsset);
+      
+      // Envia notificação para o Telegram
+      await sendMaintenanceAlert(updatedAsset, reason, currentUser);
+
       setShowModal(false);
       setSelectedAssetId('');
       setReason('');
+      setEmployeeFilter('');
     } catch (error) {
       alert("Erro ao iniciar manutenção.");
     } finally {
@@ -174,7 +193,6 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
         history: [...(detailAsset.history || []), historyEntry]
       };
 
-      console.log("[Maintenance] Executando baixa para:", updatedAsset.id);
       await onUpdateAsset(updatedAsset);
       
       onAddNotification({
@@ -200,13 +218,11 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
     if (!detailAsset) return;
     setIsSubmitting(true);
     try {
-      // Cria uma requisição padronizada para o fluxo de compras
       await onAddRequest({
         requesterId: currentUser.id,
-        employeeId: null, // Sem vínculo com funcionário específico, é peça de estoque/manutenção
+        employeeId: null,
         items: [poType],
         observation: `[MANUTENÇÃO] Aquisição de peça (${poType}) para reparo do ativo ${detailAsset.id}.\nDiagnóstico Atual: ${finalDiagnosis || detailAsset.observations}`,
-        // ItemFulfillment com estrutura completa para entrar direto no fluxo de Cotação
         itemFulfillments: [{ 
           type: poType, 
           isPurchaseOrder: true, 
@@ -220,7 +236,6 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
       });
       
       setShowPOForm(false);
-      // Fecha a tela de manutenção automaticamente após iniciar o fluxo de compra com sucesso
       setShowDetailModal(false);
       setDetailAsset(null);
       setFinalDiagnosis('');
@@ -234,8 +249,7 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
       alert("Fluxo de compra iniciado com sucesso!\nO modal de manutenção foi fechado. Acompanhe a cotação no módulo 'Pedidos de Compra'.");
     } catch (e: any) {
       console.error(e);
-      // Proteção contra erro [object Object] se a exceção não tiver message
-      const errorMsg = e?.message || JSON.stringify(e) || "Erro desconhecido";
+      const errorMsg = e?.message || "Erro desconhecido";
       alert("Erro ao iniciar fluxo de compra: " + errorMsg);
     } finally {
       setIsSubmitting(false);
@@ -322,181 +336,208 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ assets, employe
                  <h3 className="text-2xl font-black tracking-tight flex items-center gap-3">
                    <Wrench className="w-7 h-7" /> Entrada em Manutenção
                  </h3>
-                 <button onClick={() => setShowModal(false)} className="p-2 hover:bg-white/10 rounded-full">
-                    <X className="w-6 h-6" />
-                 </button>
+                 <button onClick={() => setShowModal(false)} className="p-2 hover:bg-white/10 rounded-full"><X className="w-6 h-6" /></button>
               </div>
 
-              <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
-                 <div className="w-full lg:w-1/2 border-r border-slate-100 flex flex-col p-8 bg-slate-50/50 overflow-y-auto custom-scrollbar">
-                    <div className="relative mb-6">
-                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-                       <input 
-                         type="text"
-                         placeholder="Buscar por Patrimônio..."
-                         className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 bg-white outline-none font-bold shadow-sm"
-                         value={searchTerm}
-                         onChange={(e) => setSearchTerm(e.target.value)}
-                       />
+              <form onSubmit={handleOpenMaintenance} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+                 <div className="space-y-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Selecione o Equipamento</label>
+                    
+                    {/* Filtro de Colaborador */}
+                    <div className="space-y-2">
+                       <select 
+                         className="w-full p-4 rounded-2xl border border-slate-200 bg-white font-bold outline-none focus:ring-2 focus:ring-amber-500 transition-shadow"
+                         value={employeeFilter}
+                         onChange={(e) => setEmployeeFilter(e.target.value)}
+                       >
+                          <option value="">Filtrar por Colaborador (Todos)</option>
+                          {employees.map(emp => (
+                             <option key={emp.id} value={emp.id}>{emp.name} — {emp.sector}</option>
+                          ))}
+                       </select>
                     </div>
-                    <div className="space-y-3">
-                       {filteredAvailable.map(asset => (
-                         <button 
-                          key={asset.id}
-                          type="button"
-                          onClick={() => setSelectedAssetId(asset.id)}
-                          className={`w-full p-4 rounded-2xl border transition-all flex items-center justify-between group ${
-                            selectedAssetId === asset.id 
-                              ? 'bg-amber-600 border-amber-600 text-white shadow-xl' 
-                              : 'bg-white border-slate-200 text-slate-800 hover:border-amber-300'
-                          }`}
-                         >
-                            <div className="text-left">
-                               <p className="text-xs font-black uppercase tracking-tight">{asset.type}</p>
-                               <p className={`text-[10px] font-bold ${selectedAssetId === asset.id ? 'text-amber-100' : 'text-slate-500'}`}>
-                                 {asset.brand} {asset.model} • {asset.id}
-                               </p>
-                            </div>
-                         </button>
-                       ))}
-                    </div>
-                 </div>
-                 <div className="flex-1 p-8 bg-white overflow-y-auto">
-                    <form onSubmit={handleOpenMaintenance} className="space-y-8">
-                       <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Diagnóstico Inicial</label>
-                          <textarea 
-                            className="w-full p-5 rounded-[2rem] border border-slate-200 bg-slate-50 outline-none resize-none h-40 font-medium text-slate-700"
-                            placeholder="Descreva o problema observado..."
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                            required
+
+                    <div className="bg-slate-50 p-4 rounded-[2rem] border border-slate-200">
+                       <div className="relative mb-4">
+                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+                          <input 
+                            className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 font-bold outline-none focus:ring-2 focus:ring-amber-500" 
+                            placeholder="Buscar por ID, Marca ou Modelo..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
                           />
                        </div>
-                       <button 
-                        type="submit"
-                        disabled={!selectedAssetId || isSubmitting}
-                        className={`w-full py-5 rounded-[2rem] font-black shadow-xl transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-3 ${
-                          selectedAssetId && !isSubmitting ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-slate-100 text-slate-300'
-                        }`}
-                       >
-                          {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                          {isSubmitting ? 'Iniciando...' : 'Confirmar Entrada'}
-                       </button>
-                    </form>
+                       <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                          {filteredAvailable.map(asset => (
+                             <div 
+                               key={asset.id}
+                               onClick={() => setSelectedAssetId(asset.id)}
+                               className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                                 selectedAssetId === asset.id 
+                                   ? 'bg-amber-100 border-amber-300 shadow-md' 
+                                   : 'bg-white border-slate-100 hover:border-amber-200'
+                               }`}
+                             >
+                                <div className="flex items-center gap-3">
+                                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${selectedAssetId === asset.id ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                      <Package className="w-4 h-4" />
+                                   </div>
+                                   <div>
+                                      <p className="text-xs font-black text-slate-800">{asset.type} - {asset.brand} {asset.model}</p>
+                                      <p className="text-[10px] text-slate-500 font-mono">{asset.id}</p>
+                                   </div>
+                                </div>
+                                {selectedAssetId === asset.id && <CheckCircle2 className="w-5 h-5 text-amber-600" />}
+                             </div>
+                          ))}
+                          {filteredAvailable.length === 0 && (
+                            <p className="text-center py-4 text-xs font-bold text-slate-400 uppercase">Nenhum ativo disponível encontrado.</p>
+                          )}
+                       </div>
+                    </div>
                  </div>
+
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Relato do Problema / Motivo</label>
+                    <textarea 
+                      className="w-full p-6 rounded-[2rem] border border-slate-200 font-medium outline-none focus:ring-2 focus:ring-amber-500 h-32 bg-slate-50 focus:bg-white transition-colors"
+                      placeholder="Descreva o defeito relatado pelo usuário ou motivo da manutenção preventiva..."
+                      value={reason}
+                      onChange={e => setReason(e.target.value)}
+                      required
+                    />
+                 </div>
+              </form>
+
+              <div className="p-8 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                 <button onClick={() => setShowModal(false)} className="px-8 py-4 font-bold text-slate-400 hover:bg-slate-100 rounded-2xl transition-all">Cancelar</button>
+                 <button 
+                   onClick={handleOpenMaintenance}
+                   disabled={!selectedAssetId || !reason || isSubmitting}
+                   className="px-10 py-4 bg-amber-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-amber-100 flex items-center gap-2 hover:bg-amber-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
+                   Confirmar Entrada
+                 </button>
               </div>
            </div>
         </div>
       )}
 
       {showDetailModal && detailAsset && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-           <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95">
-              <div className="p-8 bg-slate-900 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-[100] flex items-center justify-end p-0 md:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+           <div className="bg-white w-full max-w-2xl h-full md:h-auto md:max-h-[95vh] md:rounded-[3rem] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 overflow-hidden">
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-amber-600 rounded-2xl flex items-center justify-center">
-                       <Settings2 className="w-7 h-7" />
+                    <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 shadow-sm">
+                       <Activity className="w-7 h-7" />
                     </div>
                     <div>
-                       <h3 className="text-2xl font-black tracking-tight">{detailAsset.id}</h3>
-                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Encerramento de Ordem Técnica</p>
+                       <h3 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">Diagnóstico & Reparo</h3>
+                       <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{detailAsset.id} • {detailAsset.model}</p>
                     </div>
                  </div>
-                 <button onClick={() => setShowDetailModal(false)} className="p-2 hover:bg-white/10 rounded-full">
-                    <X className="w-6 h-6" />
+                 <button onClick={() => setShowDetailModal(false)} className="p-2 hover:bg-slate-200 rounded-full transition-all">
+                    <X className="w-6 h-6 text-slate-400" />
                  </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-                       <History className="w-4 h-4 text-amber-500" /> Diagnóstico Inicial de Entrada
-                    </label>
-                    <div className="w-full p-6 rounded-[2.5rem] bg-slate-50 border-2 border-slate-100 font-bold text-slate-500 italic">
-                       "{detailAsset.observations}"
-                    </div>
+              <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+                 <div className="bg-amber-50 p-6 rounded-3xl border border-amber-100 space-y-2">
+                    <h4 className="text-[10px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" /> Motivo da Entrada
+                    </h4>
+                    <p className="text-sm font-semibold text-slate-700 leading-relaxed italic">
+                      "{detailAsset.observations}"
+                    </p>
                  </div>
 
-                 <div className="space-y-3">
-                    <div className="flex justify-between items-center ml-1">
-                      <label className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-colors ${validationError ? 'text-rose-500' : 'text-blue-600'}`}>
-                         <FileText className="w-4 h-4" /> Laudo Técnico / Justificativa (Obrigatório)
-                      </label>
-                      {validationError && <span className="text-[9px] font-black text-rose-500 uppercase animate-pulse">Preenchimento Necessário</span>}
+                 <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Laudo Técnico Final / Solução</label>
+                       {validationError && <span className="text-[10px] font-bold text-rose-500 animate-pulse">Campo Obrigatório</span>}
                     </div>
                     <textarea 
-                      className={`w-full p-6 rounded-[2.5rem] bg-white border-2 outline-none font-bold text-slate-800 min-h-[160px] resize-none transition-all ${validationError ? 'border-rose-300 ring-2 ring-rose-100 shadow-lg shadow-rose-100' : 'border-slate-200 focus:border-blue-500'}`}
-                      placeholder="Relate os procedimentos realizados ou o motivo técnico para a baixa patrimonial..."
+                      className={`w-full p-6 rounded-[2rem] border ${validationError ? 'border-rose-300 ring-2 ring-rose-100' : 'border-slate-200'} font-medium outline-none focus:ring-2 focus:ring-blue-500 h-40 bg-white shadow-sm`}
+                      placeholder="Descreva o procedimento realizado, peças trocadas ou motivo da condenação do equipamento..."
                       value={finalDiagnosis}
-                      onChange={(e) => {
+                      onChange={e => {
                         setFinalDiagnosis(e.target.value);
-                        if (e.target.value.trim()) setValidationError(false);
+                        if(e.target.value.trim()) setValidationError(false);
                       }}
                     />
                  </div>
 
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-                    <button 
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => setShowPOForm(!showPOForm)}
-                      className="w-full p-5 rounded-2xl border-2 border-slate-100 hover:border-blue-600 hover:bg-blue-50/30 transition-all flex flex-col items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                       <ShoppingCart className="w-5 h-5 text-blue-600" />
-                       <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">Solicitar Peças</span>
-                    </button>
-
-                    <button 
-                      type="button"
-                      onClick={handleRetireAsset}
-                      disabled={isSubmitting}
-                      className={`w-full p-5 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 disabled:opacity-50 ${validationError ? 'border-rose-400 bg-rose-50 animate-bounce' : 'border-slate-100 hover:border-rose-600 hover:bg-rose-50/30'}`}
-                    >
-                       <Trash2 className={`w-5 h-5 ${validationError ? 'text-rose-600' : 'text-rose-500'}`} />
-                       <span className={`text-[11px] font-black uppercase tracking-widest ${validationError ? 'text-rose-800' : 'text-rose-700'}`}>Baixa / Inativar</span>
-                    </button>
-                 </div>
-
                  {showPOForm && (
-                    <div className="bg-blue-50 p-6 rounded-[2rem] border-2 border-blue-100 space-y-4 animate-in slide-in-from-top-2">
-                       <select 
-                          className="w-full p-4 rounded-xl bg-white border border-blue-200 font-bold outline-none"
-                          value={poType}
-                          onChange={(e) => setPoType(e.target.value as AssetType)}
-                       >
-                          {ASSET_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                       </select>
-                       <button 
-                          type="button"
-                          onClick={handleCreatePurchaseOrder}
-                          disabled={isSubmitting}
-                          className="w-full bg-blue-600 text-white font-black py-4 rounded-xl shadow-lg uppercase tracking-widest text-[10px] disabled:opacity-50"
-                       >
-                          Iniciar Fluxo de Compra
-                       </button>
-                       <p className="text-[9px] text-blue-700 text-center font-bold">O pedido seguirá para cotação no módulo de Compras.</p>
-                    </div>
+                   <div className="bg-blue-50 p-6 rounded-[2rem] border border-blue-100 animate-in slide-in-from-top-4">
+                      <h4 className="text-xs font-black text-blue-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                         <ShoppingCart className="w-4 h-4" /> Solicitar Peça de Reposição
+                      </h4>
+                      <div className="space-y-3">
+                         <label className="text-[10px] font-bold text-slate-500 uppercase">Tipo de Peça</label>
+                         <select 
+                           className="w-full p-3 rounded-xl border border-blue-200 bg-white font-bold text-sm outline-none"
+                           value={poType}
+                           onChange={(e) => setPoType(e.target.value as AssetType)}
+                         >
+                            {ASSET_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                         </select>
+                         <div className="flex gap-2 pt-2">
+                            <button 
+                              onClick={() => setShowPOForm(false)}
+                              className="flex-1 py-3 bg-white border border-slate-200 rounded-xl font-bold text-xs text-slate-500"
+                            >
+                               Cancelar
+                            </button>
+                            <button 
+                              onClick={handleCreatePurchaseOrder}
+                              disabled={isSubmitting}
+                              className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-blue-700"
+                            >
+                               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Abrir Pedido'}
+                            </button>
+                         </div>
+                      </div>
+                   </div>
                  )}
+              </div>
+              
+              <div className="p-6 bg-slate-50 border-t border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-3">
+                 {!showPOForm && (
+                   <button 
+                     onClick={() => setShowPOForm(true)}
+                     className="py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-black uppercase text-[9px] tracking-widest hover:border-blue-400 hover:text-blue-600 transition-all flex flex-col items-center justify-center gap-1"
+                   >
+                     <ShoppingCart className="w-4 h-4" />
+                     Solicitar Peça
+                   </button>
+                 )}
+                 
+                 <button 
+                   onClick={handleRetireAsset}
+                   disabled={isSubmitting}
+                   className="py-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-2xl font-black uppercase text-[9px] tracking-widest hover:bg-rose-100 hover:border-rose-300 transition-all flex flex-col items-center justify-center gap-1"
+                 >
+                   <Trash2 className="w-4 h-4" />
+                   Condenar / Baixar
+                 </button>
 
-                 <div className="pt-6">
-                    <button 
-                      type="button"
-                      onClick={handleConcludeMaintenance}
-                      disabled={isSubmitting}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-xl transition-all flex items-center justify-center gap-3 active:scale-95 disabled:bg-slate-400"
-                    >
-                       {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <CheckCircle2 className="w-6 h-6" />}
-                       {isSubmitting ? 'Salvando...' : 'Concluir e Liberar p/ Uso'}
-                    </button>
-                 </div>
+                 <button 
+                   onClick={handleConcludeMaintenance}
+                   disabled={isSubmitting}
+                   className="py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[9px] tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex flex-col items-center justify-center gap-1 md:col-span-1"
+                 >
+                   <CheckCircle2 className="w-4 h-4" />
+                   Concluir Reparo
+                 </button>
               </div>
            </div>
         </div>
       )}
+      
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
       `}</style>
     </div>
   );
