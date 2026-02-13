@@ -161,6 +161,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
       const assetData = assets.map(a => {
         const emp = employees.find(e => e.id === a.assignedTo);
         const dept = departments.find(d => d.id === a.departmentId);
+        const company = emp ? legalEntities.find(l => l.id === emp.legalEntityId) : null;
         
         // Resolve Classificação Contábil
         const config = assetTypeConfigs.find(c => c.name.toLowerCase().trim() === a.type.toLowerCase().trim());
@@ -180,6 +181,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
           'Valor de Aquisição': a.purchaseValue || 0,
           'Status': a.status,
           'Responsável Atual': emp?.name || 'Estoque',
+          'Empresa (Vínculo)': company ? company.socialReason : 'Não Atribuído/Estoque',
           'Departamento': dept?.name || 'Não Vinculado',
           'Processador': a.processor,
           'RAM': a.ram,
@@ -202,7 +204,8 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
           'CPF': e.cpf,
           'Cargo/Função': e.role,
           'Setor/Departamento': dept?.name || e.sector,
-          'Empresa': legal?.socialReason || 'N/A',
+          'Empresa Vinculada': legal?.socialReason || 'N/A',
+          'CNPJ Empresa': legal?.cnpj || '',
           'Status Cadastro': e.isActive === false ? 'Inativo' : 'Ativo',
           'Qtd Ativos em Posse': assetCount
         };
@@ -235,6 +238,16 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
       }));
       const wsDepts = XLSX.utils.json_to_sheet(deptData);
       XLSX.utils.book_append_sheet(wb, wsDepts, "Departamentos");
+
+      // 5. Aba de Dados Corporativos (Legal Entities)
+      const legalData = legalEntities.map(l => ({
+        'ID Sistema': l.id,
+        'Razão Social': l.socialReason,
+        'CNPJ': l.cnpj,
+        'Endereço': l.address
+      }));
+      const wsLegal = XLSX.utils.json_to_sheet(legalData);
+      XLSX.utils.book_append_sheet(wb, wsLegal, "Dados Corporativos");
 
       // Salva o arquivo
       XLSX.writeFile(wb, `AssetTrack_Export_Completo_${new Date().toISOString().slice(0,10)}.xlsx`);
