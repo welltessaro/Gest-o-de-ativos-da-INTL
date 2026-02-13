@@ -17,6 +17,7 @@ interface SystemInfoManagerProps {
   onAddLegalEntity: (entity: LegalEntity) => void;
   onUpdateLegalEntity: (entity: LegalEntity) => void;
   onRemoveLegalEntity: (id: string) => void;
+  onUpdateSystemLogo: (logo: string | null) => void; // NOVO
 }
 
 const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({ 
@@ -30,12 +31,14 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
   legalEntities,
   onAddLegalEntity,
   onUpdateLegalEntity,
-  onRemoveLegalEntity
+  onRemoveLegalEntity,
+  onUpdateSystemLogo
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   
   // States para Empresas
   const [showEntityForm, setShowEntityForm] = useState(false);
@@ -55,6 +58,8 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
     if (storedIntegration) {
       setTelegramConfig(JSON.parse(storedIntegration));
     }
+    
+    // Carrega o logo inicial do DB (via App.tsx props ou cache local momentâneo)
     const storedLogo = localStorage.getItem('assettrack_logo');
     if (storedLogo) {
       setLogoPreview(storedLogo);
@@ -67,22 +72,67 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
     setTimeout(() => setShowConfigSuccess(false), 3000);
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const resizeImage = (base64Str: string, maxWidth = 300): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(base64Str); return; }
+
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height *= maxWidth / width;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/png', 0.8)); // Compacta para PNG
+      };
+      img.onerror = () => resolve(base64Str);
+    });
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setIsUploadingLogo(true);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        setLogoPreview(base64);
-        localStorage.setItem('assettrack_logo', base64);
+      reader.onloadend = async () => {
+        try {
+          const rawBase64 = reader.result as string;
+          // Redimensiona para garantir que cabe no DB e LocalStorage sem estourar cota
+          const resizedBase64 = await resizeImage(rawBase64);
+          
+          setLogoPreview(resizedBase64);
+          localStorage.setItem('assettrack_logo', resizedBase64); // Cache rápido
+          
+          // Salva no Banco de Dados
+          await db.systemConfigs.upsert('company_logo', resizedBase64);
+          
+          // Notifica o App
+          onUpdateSystemLogo(resizedBase64);
+        } catch (err) {
+          console.error("Erro ao salvar logo:", err);
+          alert("Erro ao salvar imagem. Tente um arquivo menor.");
+        } finally {
+          setIsUploadingLogo(false);
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleRemoveLogo = () => {
+  const handleRemoveLogo = async () => {
     setLogoPreview(null);
     localStorage.removeItem('assettrack_logo');
+    await db.systemConfigs.upsert('company_logo', ''); // Salva vazio
+    onUpdateSystemLogo(null);
   };
 
   // --- ENTIDADES LEGAIS ---
@@ -135,6 +185,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
           'RAM': a.ram,
           'Armazenamento': a.storage,
           'Observações': a.observations,
+          'Fotos (Base64)': (a.photos || []).join('|||'), // Exporta fotos separadas por pipe triplo
           'Data Criação': new Date(a.createdAt).toLocaleDateString()
         };
       });
@@ -195,6 +246,10 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
 
   // --- LÓGICA DE IMPORTAÇÃO (XLSX) ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // ... (Mantém a lógica existente de importação)
+    // O código existente de importação é longo e não precisa ser mudado para esta tarefa,
+    // apenas garantindo que o resto do arquivo seja mantido.
+    // ...
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
@@ -364,6 +419,10 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
                  });
               }
 
+              // Importação de FOTOS (Split por |||)
+              const rawPhotos = row['Fotos (Base64)'];
+              const importedPhotos = rawPhotos ? String(rawPhotos).split('|||').filter(p => p.trim() !== '') : [];
+
               const asset: Asset = {
                 id,
                 tagId: row['Etiqueta (Tag)'] || id,
@@ -381,7 +440,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
                 observations: row['Observações'] || '',
                 createdAt: existingAsset?.createdAt || new Date().toISOString(),
                 qrCode: existingAsset?.qrCode || `QR-${id}`,
-                photos: existingAsset?.photos || [],
+                photos: importedPhotos.length > 0 ? importedPhotos : (existingAsset?.photos || []),
                 history
               };
 
@@ -421,6 +480,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
       await db.assetTypeConfigs.clearAll();
       await db.accountingAccounts.clearAll();
       await db.legalEntities.clearAll();
+      await db.systemConfigs.clearAll(); // Limpa também configs
 
       alert("Limpeza do sistema concluída com sucesso!");
       window.location.reload();
@@ -494,6 +554,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
         </div>
       </div>
 
+      {/* Resto do componente permanece igual */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* CARD DADOS CORPORATIVOS */}
         <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-xl relative overflow-hidden">
@@ -548,7 +609,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
                 <div className="flex-1 flex flex-col h-full">
                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">Identidade Visual</h3>
                    <p className="text-slate-500 font-medium mt-1 text-sm">
-                     Logo para relatórios PDF e etiquetas.
+                     Logo para relatórios PDF e etiquetas. Salvo no banco de dados.
                    </p>
                    
                    <div className="mt-6 flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50/50 min-h-[100px]">
@@ -581,9 +642,11 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
                    <div className="mt-4">
                       <button 
                         onClick={() => logoInputRef.current?.click()}
-                        className="w-full bg-purple-500 hover:bg-purple-600 text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 shadow-lg shadow-purple-200 transition-all active:scale-95"
+                        disabled={isUploadingLogo}
+                        className="w-full bg-purple-500 hover:bg-purple-600 text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 shadow-lg shadow-purple-200 transition-all active:scale-95 disabled:opacity-50"
                       >
-                        <Upload className="w-4 h-4" /> Carregar Imagem
+                        {isUploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        {isUploadingLogo ? 'Salvando...' : 'Carregar Imagem'}
                       </button>
                    </div>
                 </div>
@@ -728,7 +791,7 @@ const SystemInfoManager: React.FC<SystemInfoManagerProps> = ({
       )}
 
       <div className="text-center py-10 opacity-50">
-         <p className="text-xs font-black uppercase tracking-widest text-slate-400">AssetTrack Pro Enterprise v2.8</p>
+         <p className="text-xs font-black uppercase tracking-widest text-slate-400">AssetTrack Pro Enterprise v2.9</p>
          <p className="text-[10px] text-slate-400 mt-1">Módulo de Importação/Exportação Avançado</p>
       </div>
 

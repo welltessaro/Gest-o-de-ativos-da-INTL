@@ -18,7 +18,7 @@ import { MOCK_USERS } from './constants';
 import { 
   Asset, Employee, EquipmentRequest, UserAccount, 
   Department, AuditSession, AppNotification, AccountingAccount, 
-  AssetTypeConfig, HistoryEntry, LegalEntity 
+  AssetTypeConfig, HistoryEntry, LegalEntity, SystemConfig
 } from './types';
 import { db, supabase } from './services/supabase';
 import { Loader2, Package, WifiOff } from 'lucide-react';
@@ -42,6 +42,9 @@ const App: React.FC = () => {
   const [accountingAccounts, setAccountingAccounts] = useState<AccountingAccount[]>([]);
   const [assetTypeConfigs, setAssetTypeConfigs] = useState<AssetTypeConfig[]>([]);
   const [legalEntities, setLegalEntities] = useState<LegalEntity[]>([]);
+  
+  // Configuração Global (Logo)
+  const [systemLogo, setSystemLogo] = useState<string | null>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -56,12 +59,13 @@ const App: React.FC = () => {
         db.notifications.list(),
         db.accountingAccounts.list(),
         db.assetTypeConfigs.list(),
-        db.legalEntities.list()
+        db.legalEntities.list(),
+        db.systemConfigs.list()
       ]);
 
       const [
         depts, assts, emps, reqs, audits, userList, 
-        notifs, accAccounts, assetConfigs, legalEnts
+        notifs, accAccounts, assetConfigs, legalEnts, configs
       ] = results.map(r => r.status === 'fulfilled' ? (r.value || []) : []) as [
         Department[],
         Asset[],
@@ -72,7 +76,8 @@ const App: React.FC = () => {
         AppNotification[],
         AccountingAccount[],
         AssetTypeConfig[],
-        LegalEntity[]
+        LegalEntity[],
+        SystemConfig[]
       ];
       
       if (results.every(r => r.status === 'rejected')) setIsOffline(true);
@@ -86,6 +91,13 @@ const App: React.FC = () => {
       setAssetTypeConfigs(assetConfigs);
       setLegalEntities(legalEnts);
       
+      // Carrega logo do DB
+      const logoConfig = configs.find(c => c.key === 'company_logo');
+      if (logoConfig && logoConfig.value) {
+        setSystemLogo(logoConfig.value);
+        localStorage.setItem('assettrack_logo', logoConfig.value); // Sync local para compatibilidade
+      }
+
       const finalUsers = userList && userList.length > 0 ? [...userList] : [...MOCK_USERS];
       if (!finalUsers.find(u => u.username === 'admin')) {
         finalUsers.push(MOCK_USERS[0]);
@@ -520,6 +532,7 @@ const App: React.FC = () => {
               onRemoveRequest={handleRemoveRequest}
               assetTypeConfigs={assetTypeConfigs}
               legalEntities={legalEntities}
+              companyLogo={systemLogo} // PASSA O LOGO DO DB
             />;
           case 'inventory-check': 
             return <InventoryCheckManager 
@@ -559,7 +572,7 @@ const App: React.FC = () => {
               assetTypeConfigs={assetTypeConfigs} 
               currentUser={currentUser}
             />;
-          case 'printing': return <PrintManager assets={assets} />;
+          case 'printing': return <PrintManager assets={assets} companyLogo={systemLogo} />;
           case 'user-management': 
             return <UserManager 
               users={users} employees={activeEmployees}
@@ -596,6 +609,7 @@ const App: React.FC = () => {
               onAddLegalEntity={handleAddLegalEntity}
               onUpdateLegalEntity={handleUpdateLegalEntity}
               onRemoveLegalEntity={handleRemoveLegalEntity}
+              onUpdateSystemLogo={(logo) => setSystemLogo(logo)} // CALLBACK PARA ATUALIZAR O APP
             />;
           default: return <div className="p-20 text-center text-slate-400 font-black uppercase tracking-widest text-xs">Módulo em Desenvolvimento</div>;
         }

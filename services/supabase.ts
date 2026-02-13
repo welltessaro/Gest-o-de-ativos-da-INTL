@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { 
   Asset, Department, Employee, EquipmentRequest, AuditSession, 
   UserAccount, AppNotification, AccountingAccount, 
-  AssetTypeConfig, LegalEntity
+  AssetTypeConfig, LegalEntity, SystemConfig
 } from '../types';
 
 // Configuração da Conexão
@@ -227,6 +227,25 @@ export const db = {
 
   // 9. AUDITORIAS
   auditSessions: createTableManager<AuditSession>('audit_sessions', 'audit_sessions'),
+
+  // 10. SYSTEM CONFIGS (Logo, etc)
+  systemConfigs: {
+    list: async (): Promise<SystemConfig[]> => {
+      try {
+        const { data, error } = await supabase.from('system_configs').select('*');
+        if (error) throw error;
+        return data as SystemConfig[];
+      } catch (err) { return []; }
+    },
+    upsert: async (key: string, value: string): Promise<void> => {
+      const { error } = await supabase.from('system_configs').upsert({ key, value });
+      if (error) throw error;
+    },
+    clearAll: async (): Promise<void> => {
+      const { error } = await supabase.from('system_configs').delete().neq('key', '0'); 
+      if (error) throw error;
+    }
+  },
 
   // Módulos Legados (Mantidos vazios para compatibilidade se algo chamar)
   accountingClassifications: {

@@ -27,6 +27,12 @@ export interface LegalEntity {
   address: string;
 }
 
+// Configurações Globais do Sistema (DB)
+export interface SystemConfig {
+  key: string;
+  value: string;
+}
+
 // Estrutura Unificada
 export interface AccountingAccount {
   id: string;
@@ -164,7 +170,7 @@ export interface AuditSession {
   generatedRequestId?: string;
 }
 
-// Configurações de Integração
+// Configurações de Integração (Legado/Local)
 export interface SystemIntegrationConfig {
   telegramBotToken?: string;
   telegramChatId?: string;

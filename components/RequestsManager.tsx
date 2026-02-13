@@ -21,7 +21,8 @@ interface RequestsManagerProps {
   onUpdateRequest: (req: EquipmentRequest) => Promise<void>;
   onRemoveRequest?: (id: string) => Promise<void>;
   assetTypeConfigs: AssetTypeConfig[];
-  legalEntities: LegalEntity[]; // Novo prop
+  legalEntities: LegalEntity[];
+  companyLogo?: string | null; // NOVO PROP
 }
 
 const RequestsManager: React.FC<RequestsManagerProps> = ({ 
@@ -34,7 +35,8 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({
   onUpdateRequest, 
   onRemoveRequest,
   assetTypeConfigs,
-  legalEntities
+  legalEntities,
+  companyLogo
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<EquipmentRequest | null>(null);
@@ -67,54 +69,92 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-    const logo = localStorage.getItem('assettrack_logo');
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const logo = companyLogo || localStorage.getItem('assettrack_logo'); // Fallback seguro
 
-    // Cabeçalho
-    let headerY = 20;
+    // --- CONFIGURAÇÃO DE LAYOUT DO CABEÇALHO ---
+    let leftContentMargin = 20;
+
+    // 1. Logo (Lado Esquerdo)
     if (logo) {
        try {
-         doc.addImage(logo, 'PNG', 20, 10, 25, 25, undefined, 'FAST');
-         headerY = 25;
-       } catch (e) { console.error('Erro ao adicionar logo', e); }
+         // Detecta formato se for Data URI (image/jpeg ou image/png)
+         const isJpeg = logo.startsWith('data:image/jpeg') || logo.startsWith('data:image/jpg');
+         const fmt = isJpeg ? 'JPEG' : 'PNG';
+         
+         // Posiciona logo em X=20, Y=10 com tamanho 30x30 para não distorcer muito e caber no header
+         doc.addImage(logo, fmt, 20, 10, 30, 30); 
+         
+         // Empurra o texto para a direita (20 da margem + 30 do logo + 10 de respiro)
+         leftContentMargin = 60; 
+       } catch (e) { 
+         console.error('Erro ao adicionar logo no PDF:', e); 
+       }
     }
 
-    // Dados da Empresa no Cabeçalho
-    doc.setFontSize(8);
+    // 2. Dados da Empresa (Lado Direito do Logo)
     doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    
+    // Coordenadas Y ajustadas para alinhar com o logo
+    let currentY = 15; 
+
     if (company) {
-       doc.text(company.socialReason.toUpperCase(), 20, headerY + 5);
+       // Razão Social
+       doc.text(company.socialReason.toUpperCase(), leftContentMargin, currentY);
+       currentY += 6; // Espaçamento
+       
+       // CNPJ
        doc.setFont('helvetica', 'normal');
-       doc.text(`CNPJ: ${company.cnpj}`, 20, headerY + 9);
-       doc.text(company.address, 20, headerY + 13);
-       headerY += 20; // Ajusta espaçamento se houver dados da empresa
+       doc.setFontSize(9);
+       doc.text(`CNPJ: ${company.cnpj}`, leftContentMargin, currentY);
+       currentY += 6;
+       
+       // Endereço com quebra de linha automática
+       // Calcula largura disponível: Largura Pagina - Margem Esquerda Atual - Margem Direita (20)
+       const maxAddressWidth = pageWidth - leftContentMargin - 20;
+       const addressLines = doc.splitTextToSize(company.address, maxAddressWidth);
+       doc.text(addressLines, leftContentMargin, currentY);
     } else {
-       doc.text('EMPRESA NÃO VINCULADA', 20, headerY + 5);
-       headerY += 15;
+       doc.text('ASSETTRACK PRO - GESTÃO DE ATIVOS', leftContentMargin, currentY);
+       currentY += 6;
+       doc.setFont('helvetica', 'normal');
+       doc.setFontSize(9);
+       doc.text('Controle Interno de Equipamentos', leftContentMargin, currentY);
     }
 
+    // Linha Divisória do Cabeçalho (Baixada para Y=45 para garantir que não corte o logo/endereço)
+    doc.setLineWidth(0.5);
+    doc.line(20, 45, pageWidth - 20, 45);
+
+    // --- TÍTULO DO DOCUMENTO ---
+    const titleY = 60;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('TERMO DE RESPONSABILIDADE E ENTREGA', pageWidth / 2, headerY, { align: 'center' });
+    doc.setFontSize(14);
+    doc.text('TERMO DE RESPONSABILIDADE E ENTREGA', pageWidth / 2, titleY, { align: 'center' });
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Protocolo: ${req.id}`, pageWidth - 20, headerY + 10, { align: 'right' });
-    doc.text(`Data: ${new Date(req.createdAt).toLocaleDateString('pt-BR')}`, pageWidth - 20, headerY + 15, { align: 'right' });
+    const dateStr = new Date(req.createdAt).toLocaleDateString('pt-BR');
+    doc.text(`Protocolo: ${req.id}   |   Data de Emissão: ${dateStr}`, pageWidth / 2, titleY + 6, { align: 'center' });
 
-    // Dados do Colaborador
-    const section1Y = headerY + 30;
+    // --- SEÇÃO 1: COLABORADOR ---
+    const section1Y = titleY + 20;
     doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
     doc.text('1. IDENTIFICAÇÃO DO COLABORADOR', 20, section1Y);
     doc.line(20, section1Y + 2, pageWidth - 20, section1Y + 2);
     
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
     doc.text(`Nome: ${employee.name}`, 20, section1Y + 10);
-    doc.text(`CPF: ${employee.cpf}`, 20, section1Y + 15);
-    doc.text(`Departamento: ${employee.sector} / ${employee.role}`, 20, section1Y + 20);
+    doc.text(`CPF: ${employee.cpf}`, 20, section1Y + 16);
+    doc.text(`Departamento: ${employee.sector} / ${employee.role}`, 20, section1Y + 22);
 
-    // Lista de Equipamentos
+    // --- SEÇÃO 2: EQUIPAMENTOS (TABELA) ---
     const section2Y = section1Y + 35;
     doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
     doc.text('2. EQUIPAMENTOS ENTREGUES', 20, section2Y);
     doc.line(20, section2Y + 2, pageWidth - 20, section2Y + 2);
 
@@ -130,38 +170,141 @@ const RequestsManager: React.FC<RequestsManagerProps> = ({
     });
 
     (doc as any).autoTable({
-      startY: section2Y + 7,
+      startY: section2Y + 8,
       head: [['Tipo', 'Marca', 'Modelo', 'Patrimônio', 'Série']],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillGray: 200, textColor: 0, fontStyle: 'bold' },
-      styles: { fontSize: 9 }
+      headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' }, // Azul padrão profissional
+      styles: { fontSize: 9, cellPadding: 2 },
+      margin: { left: 20, right: 20 }
     });
 
     const finalY = (doc as any).lastAutoTable.finalY + 15;
 
-    // Termos
+    // --- SEÇÃO 3: TERMOS LEGAIS ---
     doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
     doc.text('3. DECLARAÇÃO DE RESPONSABILIDADE', 20, finalY);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
     
-    // Texto legal atualizado para citar a empresa
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    
     const companyName = company ? company.socialReason : "a empresa";
-    const text = `Declaro ter recebido os equipamentos acima descritos em perfeito estado de conservação e funcionamento, comprometendo-me a utilizá-los exclusivamente para fins profissionais de interesse de ${companyName}. Assumo total responsabilidade pela guarda, conservação e integridade dos mesmos, ciente de que danos causados por uso indevido ou negligência poderão ser objeto de ressarcimento conforme legislação vigente. Em caso de desligamento, comprometo-me a devolver os itens imediatamente ao setor de TI.`;
+    const text = `Declaro ter recebido os equipamentos acima descritos em perfeito estado de conservação e funcionamento, comprometendo-me a utilizá-los exclusivamente para fins profissionais de interesse de ${companyName}. \n\nAssumo total responsabilidade pela guarda, conservação e integridade dos mesmos, ciente de que danos causados por uso indevido, negligência ou extravio poderão ser objeto de ressarcimento conforme legislação trabalhista vigente (Art. 462 CLT). Em caso de desligamento ou solicitação formal, comprometo-me a devolver os itens imediatamente ao setor responsável.`;
     
     const splitText = doc.splitTextToSize(text, pageWidth - 40);
-    doc.text(splitText, 20, finalY + 7);
+    doc.text(splitText, 20, finalY + 8);
 
-    // Assinaturas
-    const sigY = finalY + 60;
-    doc.line(20, sigY, 90, sigY);
-    doc.text('Assinatura do Colaborador', 35, sigY + 5);
+    // --- ASSINATURAS ---
+    const sigY = finalY + 50; // Espaço para assinar
     
+    // Assinatura Colaborador
+    doc.line(20, sigY, 90, sigY);
+    doc.setFontSize(8);
+    doc.text(employee.name.toUpperCase(), 55, sigY + 5, { align: 'center' });
+    doc.text('Colaborador(a)', 55, sigY + 9, { align: 'center' });
+    
+    // Assinatura Gestor
     doc.line(120, sigY, 190, sigY);
-    doc.text('Responsável TI (Entrega)', 135, sigY + 5);
+    doc.text('GESTÃO DE ATIVOS / TI', 155, sigY + 5, { align: 'center' });
+    doc.text('Responsável pela Entrega', 155, sigY + 9, { align: 'center' });
 
-    doc.save(`Termo_Responsabilidade_${req.id}.pdf`);
+    // --- RODAPÉ DA PÁGINA 1 ---
+    doc.setFontSize(7);
+    doc.text('Documento gerado eletronicamente pelo sistema AssetTrack Pro.', 20, 285);
+    doc.text('Página 1', pageWidth - 20, 285, { align: 'right' });
+
+    // =========================================================================
+    // SEGUNDA PÁGINA COM FOTOS (Anexo Fotográfico)
+    // =========================================================================
+    
+    // Filtra ativos que possuem fotos
+    const assetsWithPhotos = (req.itemFulfillments || [])
+      .map(f => assets.find(a => a.id === f.linkedAssetId))
+      .filter(a => a && a.photos && a.photos.length > 0) as Asset[];
+
+    if (assetsWithPhotos.length > 0) {
+      doc.addPage();
+      
+      // Cabeçalho Anexo
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('ANEXO FOTOGRÁFICO - ESTADO DOS EQUIPAMENTOS', pageWidth / 2, 20, { align: 'center' });
+      doc.setLineWidth(0.5);
+      doc.line(20, 25, pageWidth - 20, 25);
+
+      let currentY = 35;
+      const marginX = 20;
+      const colGap = 10;
+      const imgWidth = 80;
+      const imgHeight = 60;
+      const col2X = marginX + imgWidth + colGap;
+
+      assetsWithPhotos.forEach((asset) => {
+        // Verifica se cabe o título do ativo na página
+        if (currentY + 20 > pageHeight - 20) {
+          doc.addPage();
+          currentY = 20;
+        }
+
+        // Título do Ativo
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setFillColor(240, 240, 240); // Fundo cinza claro
+        doc.rect(marginX, currentY - 5, pageWidth - (marginX * 2), 8, 'F');
+        doc.text(`${asset.type.toUpperCase()} - ${asset.brand} ${asset.model} (ID: ${asset.id})`, marginX + 2, currentY);
+        currentY += 10;
+
+        let currentCol = 0; // 0 = esquerda, 1 = direita
+
+        asset.photos.forEach((photo) => {
+          // Verifica se cabe a imagem
+          if (currentY + imgHeight > pageHeight - 20) {
+            doc.addPage();
+            currentY = 20;
+            currentCol = 0;
+          }
+
+          try {
+            const isJpeg = photo.startsWith('data:image/jpeg') || photo.startsWith('data:image/jpg');
+            const fmt = isJpeg ? 'JPEG' : 'PNG';
+            
+            const xPos = currentCol === 0 ? marginX : col2X;
+            doc.addImage(photo, fmt, xPos, currentY, imgWidth, imgHeight);
+            
+            // Desenha borda na imagem
+            doc.setDrawColor(200, 200, 200);
+            doc.rect(xPos, currentY, imgWidth, imgHeight);
+
+            // Controle de Coluna/Linha
+            if (currentCol === 0) {
+              currentCol = 1;
+            } else {
+              currentCol = 0;
+              currentY += imgHeight + 10; // Avança linha
+            }
+          } catch (e) {
+            console.error('Erro ao renderizar imagem no PDF', e);
+          }
+        });
+
+        // Se terminou na coluna da esquerda, avança o Y para o próximo ativo não sobrepor
+        if (currentCol === 1) {
+          currentY += imgHeight + 10;
+        }
+        
+        currentY += 5; // Espaço extra entre ativos
+      });
+
+      // Rodapé da Página 2+
+      const pageCount = doc.getNumberOfPages();
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Anexo Fotográfico - AssetTrack Pro', 20, 285);
+      doc.text(`Página ${pageCount}`, pageWidth - 20, 285, { align: 'right' });
+    }
+
+    doc.save(`Termo_${req.id}_${employee.name.split(' ')[0]}.pdf`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

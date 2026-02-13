@@ -18,10 +18,17 @@ DROP TABLE IF EXISTS public.accounting_accounts CASCADE;
 DROP TABLE IF EXISTS public.employees CASCADE;
 DROP TABLE IF EXISTS public.departments CASCADE;
 DROP TABLE IF EXISTS public.legal_entities CASCADE;
+DROP TABLE IF EXISTS public.system_configs CASCADE;
 
 -- 2. CRIAÇÃO DAS TABELAS (CREATE TABLES)
 
--- 2.0 Entidades Legais (Empresas/Filiais)
+-- 2.0 Configurações Globais do Sistema (NOVO)
+CREATE TABLE public.system_configs (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+
+-- 2.0.1 Entidades Legais (Empresas/Filiais)
 CREATE TABLE public.legal_entities (
     id TEXT PRIMARY KEY,
     "socialReason" TEXT NOT NULL, -- Razão Social
@@ -165,6 +172,7 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_configs ENABLE ROW LEVEL SECURITY;
 
 -- Cria política de ACESSO TOTAL para a API (Anon/Authenticated/ServiceRole)
 CREATE POLICY "Enable All Access" ON public.legal_entities FOR ALL USING (true) WITH CHECK (true);
@@ -177,7 +185,7 @@ CREATE POLICY "Enable All Access" ON public.users FOR ALL USING (true) WITH CHEC
 CREATE POLICY "Enable All Access" ON public.requests FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable All Access" ON public.notifications FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Enable All Access" ON public.audit_sessions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Enable All Access" ON public.system_configs FOR ALL USING (true) WITH CHECK (true);
 
 -- 5. FINALIZAÇÃO
--- Recarrega o cache de schema do PostgREST para garantir que a API reconheça as mudanças imediatamente
 NOTIFY pgrst, 'reload schema';

@@ -16,9 +16,10 @@ import { Asset } from '../types';
 
 interface PrintManagerProps {
   assets: Asset[];
+  companyLogo?: string | null; // NOVO PROP
 }
 
-const PrintManager: React.FC<PrintManagerProps> = ({ assets }) => {
+const PrintManager: React.FC<PrintManagerProps> = ({ assets, companyLogo }) => {
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [exporting, setExporting] = useState<string | null>(null);
@@ -81,7 +82,7 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets }) => {
   const handleExportPdf = () => {
     setExporting('PDF');
     const selectedAssets = assets.filter(a => selectedAssetIds.includes(a.id));
-    const logo = localStorage.getItem('assettrack_logo');
+    const logo = companyLogo || localStorage.getItem('assettrack_logo');
     
     // Geramos um documento HTML altamente estilizado que atua como o "PDF" das etiquetas
     const htmlContent = `
@@ -303,8 +304,8 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets }) => {
                 <div className="bg-white p-4 rounded-3xl shadow-2xl shadow-blue-500/10 print:shadow-none print:border-2 print:border-black">
                    <div className="border-[1.5px] border-slate-900 p-3 rounded-2xl flex flex-col items-center gap-4">
                       <div className="text-center">
-                         {localStorage.getItem('assettrack_logo') ? (
-                           <img src={localStorage.getItem('assettrack_logo')!} alt="Logo" className="h-6 object-contain mb-1" />
+                         {companyLogo ? (
+                           <img src={companyLogo} alt="Logo" className="h-6 object-contain mb-1" />
                          ) : (
                            <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none mb-1 print:text-black">AssetTrack Pro</p>
                          )}
@@ -357,8 +358,8 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets }) => {
         <div className="flex flex-wrap gap-4 p-4">
           {assets.filter(a => selectedAssetIds.includes(a.id)).map(a => (
             <div key={a.id} className="page-break-after-always flex flex-col items-center justify-center border-2 border-black p-4 w-[4cm] h-[4cm] text-black bg-white">
-               {localStorage.getItem('assettrack_logo') ? (
-                 <img src={localStorage.getItem('assettrack_logo')!} alt="Logo" className="h-5 object-contain mb-1" />
+               {companyLogo ? (
+                 <img src={companyLogo} alt="Logo" className="h-5 object-contain mb-1" />
                ) : (
                  <p className="text-[10px] font-black text-blue-600 uppercase mb-1">AssetTrack Pro</p>
                )}
