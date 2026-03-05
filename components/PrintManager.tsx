@@ -138,61 +138,77 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets, companyLogo }) => {
         <meta charset="utf-8">
         <title>Etiquetas Sequenciais - AssetTrack Pro</title>
         <style>
-          body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+          body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; }
           .label-card {
-            width: 150px;
-            height: 150px;
-            border: 2px solid #000;
-            padding: 10px;
+            width: 200px;
+            height: 80px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            display: flex;
+            overflow: hidden;
+            page-break-inside: avoid;
+            background: white;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+          }
+          .label-left {
+            width: 40%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+            border-right: 1px dashed #e2e8f0;
+          }
+          .label-right {
+            width: 60%;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            text-align: center;
-            page-break-inside: avoid;
-            background: white;
-            position: relative;
+            padding: 5px;
           }
           .company-logo {
-            max-height: 25px;
-            max-width: 100px;
-            margin-bottom: 5px;
+            max-width: 100%;
+            max-height: 60px;
             object-fit: contain;
-          }
-          .company-name {
-            font-size: 10px;
-            font-weight: 900;
-            text-transform: uppercase;
-            color: #2563eb;
-            margin-bottom: 5px;
           }
           .barcode-img {
-            width: 120px;
-            height: 40px;
-            margin: 5px 0;
-            object-fit: contain;
+            width: 95%;
+            height: 35px;
+            object-fit: fill;
+          }
+          .label-title {
+            font-size: 7px;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: 600;
+            margin-bottom: 2px;
           }
           .inventory-id {
             font-family: monospace;
-            font-size: 16px;
+            font-size: 10px;
             font-weight: 900;
             color: #000;
-            margin-top: 2px;
+            margin-top: 1px;
+            letter-spacing: 0.5px;
           }
-          .footer { font-size: 8px; color: #64748b; margin-top: 4px; text-transform: uppercase; font-weight: bold; }
           @media print {
-            body { padding: 0; gap: 10px; }
-            .label-card { border-color: #000; }
+            body { padding: 0; gap: 5px; }
+            .label-card { border: 1px solid #000; box-shadow: none; }
+            .label-left { border-right: 1px dashed #94a3b8; }
           }
         </style>
       </head>
       <body>
         ${tags.map(tag => `
           <div class="label-card">
-            ${logo ? `<img src="${logo}" class="company-logo" />` : `<div class="company-name">AssetTrack Pro</div>`}
-            <img src="${tag.barcode}" class="barcode-img" />
-            <div class="inventory-id">${tag.id}</div>
-            <div class="footer">Patrimônio</div>
+            <div class="label-left">
+              ${logo ? `<img src="${logo}" class="company-logo" />` : ``}
+            </div>
+            <div class="label-right">
+              <div class="label-title">Patrimônio</div>
+              <img src="${tag.barcode}" class="barcode-img" />
+              <div class="inventory-id">${tag.id}</div>
+            </div>
           </div>
         `).join('')}
         <script>
@@ -349,66 +365,77 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets, companyLogo }) => {
         <meta charset="utf-8">
         <title>Etiquetas de Inventário - AssetTrack Pro</title>
         <style>
-          body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+          body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; }
           .label-card {
-            width: 150px;
-            height: 150px;
-            border: 2px solid #000;
-            padding: 10px;
+            width: 200px;
+            height: 80px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            display: flex;
+            overflow: hidden;
+            page-break-inside: avoid;
+            background: white;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+          }
+          .label-left {
+            width: 40%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+            border-right: 1px dashed #e2e8f0;
+          }
+          .label-right {
+            width: 60%;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            text-align: center;
-            page-break-inside: avoid;
-            background: white;
-            position: relative;
+            padding: 5px;
           }
           .company-logo {
-            max-height: 20px;
-            max-width: 80px;
-            margin-bottom: 5px;
+            max-width: 100%;
+            max-height: 60px;
             object-fit: contain;
           }
-          .company-name {
-            font-size: 10px;
-            font-weight: 900;
-            text-transform: uppercase;
-            color: #2563eb;
-            margin-bottom: 5px;
+          .barcode-img {
+            width: 95%;
+            height: 35px;
+            object-fit: fill;
           }
-          .qr-placeholder {
-            width: 80px;
-            height: 80px;
-            background: #f1f5f9;
-            border: 1px solid #e2e8f0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 8px;
-            color: #94a3b8;
-            margin-bottom: 5px;
+          .label-title {
+            font-size: 7px;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: 600;
+            margin-bottom: 2px;
           }
           .inventory-id {
             font-family: monospace;
-            font-size: 14px;
+            font-size: 10px;
             font-weight: 900;
             color: #000;
+            margin-top: 1px;
+            letter-spacing: 0.5px;
           }
-          .footer { font-size: 6px; color: #64748b; margin-top: 2px; }
           @media print {
-            body { padding: 0; gap: 10px; }
-            .label-card { border-color: #000; }
+            body { padding: 0; gap: 5px; }
+            .label-card { border: 1px solid #000; box-shadow: none; }
+            .label-left { border-right: 1px dashed #94a3b8; }
           }
         </style>
       </head>
       <body>
         ${selectedAssets.map(a => `
           <div class="label-card">
-            ${logo ? `<img src="${logo}" class="company-logo" />` : `<div class="company-name">AssetTrack Pro</div>`}
-            <div class="qr-placeholder">[QR: ${a.qrCode}]</div>
-            <div class="inventory-id">${a.id}</div>
-            <div class="footer">${a.brand} - ${a.type}</div>
+            <div class="label-left">
+              ${logo ? `<img src="${logo}" class="company-logo" />` : ``}
+            </div>
+            <div class="label-right">
+              <div class="label-title">Patrimônio</div>
+              <img src="${generateBarcodeDataUrl(a.id)}" class="barcode-img" />
+              <div class="inventory-id">${a.id}</div>
+            </div>
           </div>
         `).join('')}
         <script>
