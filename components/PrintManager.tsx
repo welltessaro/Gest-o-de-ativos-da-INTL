@@ -138,63 +138,80 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets, companyLogo }) => {
         <meta charset="utf-8">
         <title>Etiquetas Sequenciais - AssetTrack Pro</title>
         <style>
-          @page { size: 8.3cm 5.3cm; margin: 0; }
-          body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; height: 100vh; }
+          @page { size: 84mm 25mm; margin: 0; }
+          body { 
+            font-family: 'Inter', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            width: 84mm;
+            display: flex; 
+            flex-wrap: wrap; 
+            justify-content: flex-start;
+            align-content: flex-start;
+          }
           .label-card {
-            width: 8.3cm;
-            height: 5.3cm;
-            border: 1px solid #e2e8f0;
+            width: 40mm;
+            height: 25mm;
+            border: 1px solid #e2e8f0; /* Border for screen preview */
             display: flex;
             overflow: hidden;
             page-break-inside: avoid;
             background: white;
             box-sizing: border-box;
+            margin-right: 2mm; /* Horizontal gap */
+            margin-bottom: 0;
+          }
+          /* Remove right margin for every 2nd item to fit row */
+          .label-card:nth-child(2n) {
+            margin-right: 0;
           }
           .label-left {
-            width: 40%;
+            width: 35%;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 5px;
+            padding: 2px;
             border-right: 1px dashed #e2e8f0;
           }
           .label-right {
-            width: 60%;
+            width: 65%;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 5px;
+            padding: 2px;
           }
           .company-logo {
             max-width: 100%;
-            max-height: 4cm;
+            max-height: 18mm;
             object-fit: contain;
           }
           .barcode-img {
             width: 95%;
-            height: 1.5cm;
+            height: 8mm;
             object-fit: fill;
-            margin-bottom: 5px;
+            margin-bottom: 1px;
           }
           .label-title {
-            font-size: 10px;
+            font-size: 5px;
             text-transform: uppercase;
             color: #64748b;
             font-weight: 600;
-            margin-bottom: 5px;
+            margin-bottom: 1px;
+            line-height: 1;
           }
           .inventory-id {
             font-family: monospace;
-            font-size: 14px;
+            font-size: 8px;
             font-weight: 900;
             color: #000;
-            margin-top: 2px;
-            letter-spacing: 1px;
+            margin-top: 0;
+            letter-spacing: 0.5px;
+            line-height: 1;
           }
           @media print {
-            body { height: auto; display: block; }
-            .label-card { border: none; page-break-after: always; }
+            body { width: auto; }
+            .label-card { border: none; }
             .label-left { border-right: 1px dashed #000; }
           }
         </style>
@@ -369,63 +386,79 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets, companyLogo }) => {
         <meta charset="utf-8">
         <title>Etiquetas de Inventário - AssetTrack Pro</title>
         <style>
-          @page { size: 8.3cm 5.3cm; margin: 0; }
-          body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; height: 100vh; }
+          @page { size: 84mm 25mm; margin: 0; }
+          body { 
+            font-family: 'Inter', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            width: 84mm;
+            display: flex; 
+            flex-wrap: wrap; 
+            justify-content: flex-start;
+            align-content: flex-start;
+          }
           .label-card {
-            width: 8.3cm;
-            height: 5.3cm;
+            width: 40mm;
+            height: 25mm;
             border: 1px solid #e2e8f0;
             display: flex;
             overflow: hidden;
             page-break-inside: avoid;
             background: white;
             box-sizing: border-box;
+            margin-right: 2mm;
+            margin-bottom: 0;
+          }
+          .label-card:nth-child(2n) {
+            margin-right: 0;
           }
           .label-left {
-            width: 40%;
+            width: 35%;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 5px;
+            padding: 2px;
             border-right: 1px dashed #e2e8f0;
           }
           .label-right {
-            width: 60%;
+            width: 65%;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 5px;
+            padding: 2px;
           }
           .company-logo {
             max-width: 100%;
-            max-height: 4cm;
+            max-height: 18mm;
             object-fit: contain;
           }
           .barcode-img {
             width: 95%;
-            height: 1.5cm;
+            height: 8mm;
             object-fit: fill;
-            margin-bottom: 5px;
+            margin-bottom: 1px;
           }
           .label-title {
-            font-size: 10px;
+            font-size: 5px;
             text-transform: uppercase;
             color: #64748b;
             font-weight: 600;
-            margin-bottom: 5px;
+            margin-bottom: 1px;
+            line-height: 1;
           }
           .inventory-id {
             font-family: monospace;
-            font-size: 14px;
+            font-size: 8px;
             font-weight: 900;
             color: #000;
-            margin-top: 2px;
-            letter-spacing: 1px;
+            margin-top: 0;
+            letter-spacing: 0.5px;
+            line-height: 1;
           }
           @media print {
-            body { height: auto; display: block; }
-            .label-card { border: none; page-break-after: always; }
+            body { width: auto; }
+            .label-card { border: none; }
             .label-left { border-right: 1px dashed #000; }
           }
         </style>
