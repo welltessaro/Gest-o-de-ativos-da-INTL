@@ -138,17 +138,17 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets, companyLogo }) => {
         <meta charset="utf-8">
         <title>Etiquetas Sequenciais - AssetTrack Pro</title>
         <style>
-          body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; }
+          @page { size: 8.3cm 5.3cm; margin: 0; }
+          body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; height: 100vh; }
           .label-card {
-            width: 200px;
-            height: 80px;
+            width: 8.3cm;
+            height: 5.3cm;
             border: 1px solid #e2e8f0;
-            border-radius: 4px;
             display: flex;
             overflow: hidden;
             page-break-inside: avoid;
             background: white;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            box-sizing: border-box;
           }
           .label-left {
             width: 40%;
@@ -168,33 +168,34 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets, companyLogo }) => {
           }
           .company-logo {
             max-width: 100%;
-            max-height: 60px;
+            max-height: 4cm;
             object-fit: contain;
           }
           .barcode-img {
             width: 95%;
-            height: 35px;
+            height: 1.5cm;
             object-fit: fill;
+            margin-bottom: 5px;
           }
           .label-title {
-            font-size: 7px;
+            font-size: 10px;
             text-transform: uppercase;
             color: #64748b;
             font-weight: 600;
-            margin-bottom: 2px;
+            margin-bottom: 5px;
           }
           .inventory-id {
             font-family: monospace;
-            font-size: 10px;
+            font-size: 14px;
             font-weight: 900;
             color: #000;
-            margin-top: 1px;
-            letter-spacing: 0.5px;
+            margin-top: 2px;
+            letter-spacing: 1px;
           }
           @media print {
-            body { padding: 0; gap: 5px; }
-            .label-card { border: 1px solid #000; box-shadow: none; }
-            .label-left { border-right: 1px dashed #94a3b8; }
+            body { height: auto; display: block; }
+            .label-card { border: none; page-break-after: always; }
+            .label-left { border-right: 1px dashed #000; }
           }
         </style>
       </head>
@@ -251,26 +252,30 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets, companyLogo }) => {
         <meta charset="utf-8">
         <title>Fichas de Cadastro Manual - AssetTrack Pro</title>
         <style>
-          body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; background: #fff; }
+          body { font-family: 'Inter', sans-serif; margin: 0; padding: 10px; background: #fff; }
           .form-card {
-            border: 2px dashed #94a3b8;
-            padding: 25px;
-            margin-bottom: 25px;
+            border: 1px dashed #94a3b8;
+            padding: 12px;
+            margin-bottom: 8px;
             page-break-inside: avoid;
             background: white;
-            border-radius: 8px;
+            border-radius: 6px;
+            height: 235px; /* Fixed height to ensure 4 fit */
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
           }
-          .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #0f172a; padding-bottom: 15px; }
-          .logo { height: 35px; object-fit: contain; }
-          .company-text { font-weight: 900; color: #2563eb; text-transform: uppercase; font-size: 16px; }
-          .title { font-weight: 900; text-transform: uppercase; font-size: 14px; color: #0f172a; background: #f1f5f9; padding: 5px 10px; border-radius: 4px; }
-          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-          .field { margin-bottom: 5px; }
-          .label { display: block; font-size: 11px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 6px; }
-          .input-line { border-bottom: 1.5px solid #cbd5e1; height: 25px; width: 100%; background: #f8fafc; }
+          .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #0f172a; padding-bottom: 5px; flex-shrink: 0; }
+          .logo { height: 20px; object-fit: contain; }
+          .company-text { font-weight: 900; color: #2563eb; text-transform: uppercase; font-size: 12px; }
+          .title { font-weight: 900; text-transform: uppercase; font-size: 10px; color: #0f172a; background: #f1f5f9; padding: 3px 8px; border-radius: 4px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; flex-grow: 1; }
+          .field { margin-bottom: 2px; }
+          .label { display: block; font-size: 9px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 2px; }
+          .input-line { border-bottom: 1px solid #cbd5e1; height: 16px; width: 100%; background: #f8fafc; }
           .full-width { grid-column: span 2; }
-          .id-box { border: 2px solid #0f172a; padding: 8px 15px; font-family: monospace; font-weight: 900; font-size: 18px; color: #0f172a; border-radius: 6px; background: #fff; }
-          .footer-note { font-size: 10px; color: #94a3b8; margin-top: 15px; text-align: center; font-style: italic; }
+          .id-box { border: 1px solid #0f172a; padding: 2px 8px; font-family: monospace; font-weight: 900; font-size: 14px; color: #0f172a; border-radius: 4px; background: #fff; }
+          .footer-note { font-size: 8px; color: #94a3b8; margin-top: 5px; text-align: center; font-style: italic; flex-shrink: 0; }
           @media print {
             body { padding: 0; -webkit-print-color-adjust: exact; }
             .form-card { break-inside: avoid; border-color: #94a3b8; }
@@ -313,7 +318,6 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets, companyLogo }) => {
                 <div class="field full-width">
                     <span class="label">Especificações Técnicas (Proc/RAM/Disco/Detalhes)</span>
                     <div class="input-line"></div>
-                    <div class="input-line" style="margin-top: 10px;"></div>
                 </div>
                 <div class="field full-width">
                     <span class="label">Observações / Estado de Conservação</span>
@@ -365,17 +369,17 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets, companyLogo }) => {
         <meta charset="utf-8">
         <title>Etiquetas de Inventário - AssetTrack Pro</title>
         <style>
-          body { font-family: 'Inter', sans-serif; margin: 0; padding: 20px; display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; }
+          @page { size: 8.3cm 5.3cm; margin: 0; }
+          body { font-family: 'Inter', sans-serif; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; height: 100vh; }
           .label-card {
-            width: 200px;
-            height: 80px;
+            width: 8.3cm;
+            height: 5.3cm;
             border: 1px solid #e2e8f0;
-            border-radius: 4px;
             display: flex;
             overflow: hidden;
             page-break-inside: avoid;
             background: white;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            box-sizing: border-box;
           }
           .label-left {
             width: 40%;
@@ -395,33 +399,34 @@ const PrintManager: React.FC<PrintManagerProps> = ({ assets, companyLogo }) => {
           }
           .company-logo {
             max-width: 100%;
-            max-height: 60px;
+            max-height: 4cm;
             object-fit: contain;
           }
           .barcode-img {
             width: 95%;
-            height: 35px;
+            height: 1.5cm;
             object-fit: fill;
+            margin-bottom: 5px;
           }
           .label-title {
-            font-size: 7px;
+            font-size: 10px;
             text-transform: uppercase;
             color: #64748b;
             font-weight: 600;
-            margin-bottom: 2px;
+            margin-bottom: 5px;
           }
           .inventory-id {
             font-family: monospace;
-            font-size: 10px;
+            font-size: 14px;
             font-weight: 900;
             color: #000;
-            margin-top: 1px;
-            letter-spacing: 0.5px;
+            margin-top: 2px;
+            letter-spacing: 1px;
           }
           @media print {
-            body { padding: 0; gap: 5px; }
-            .label-card { border: 1px solid #000; box-shadow: none; }
-            .label-left { border-right: 1px dashed #94a3b8; }
+            body { height: auto; display: block; }
+            .label-card { border: none; page-break-after: always; }
+            .label-left { border-right: 1px dashed #000; }
           }
         </style>
       </head>
