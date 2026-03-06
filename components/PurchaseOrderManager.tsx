@@ -28,7 +28,8 @@ import {
   Ban,
   Lock,
   PenTool,
-  RotateCcw
+  RotateCcw,
+  Trash2
 } from 'lucide-react';
 import { EquipmentRequest, Employee, ItemFulfillment, Quotation, Asset, HistoryEntry, AssetType, AssetTypeConfig, UserAccount } from '../types';
 import { ASSET_TYPES } from '../constants';
@@ -65,7 +66,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
   const isBuyer = currentUser.username === 'admin' || !!currentUser.canExecutePurchase;
 
   const [newDirectOrder, setNewDirectOrder] = useState({
-    type: 'Notebook' as AssetType,
+    items: [{ type: 'Notebook' as AssetType, quantity: 1 }],
     observation: ''
   });
 
@@ -257,29 +258,59 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      const allItems: AssetType[] = [];
+      const allFulfillments: ItemFulfillment[] = [];
+
+      newDirectOrder.items.forEach(item => {
+        for (let i = 0; i < item.quantity; i++) {
+          allItems.push(item.type);
+          allFulfillments.push({
+            type: item.type,
+            isPurchaseOrder: true,
+            purchaseStatus: 'Pendente',
+            quotations: [
+              { url: '', price: 0, deliveryPrediction: '' },
+              { url: '', price: 0, deliveryPrediction: '' },
+              { url: '', price: 0, deliveryPrediction: '' }
+            ]
+          });
+        }
+      });
+
       await onAddRequest({
         requesterId: '1',
         employeeId: '', 
-        items: [newDirectOrder.type],
+        items: allItems,
         observation: newDirectOrder.observation,
-        itemFulfillments: [{
-          type: newDirectOrder.type,
-          isPurchaseOrder: true,
-          purchaseStatus: 'Pendente',
-          quotations: [
-            { url: '', price: 0, deliveryPrediction: '' },
-            { url: '', price: 0, deliveryPrediction: '' },
-            { url: '', price: 0, deliveryPrediction: '' }
-          ]
-        }]
+        itemFulfillments: allFulfillments
       });
       setShowDirectOrderModal(false);
-      setNewDirectOrder({ type: 'Notebook', observation: '' });
+      setNewDirectOrder({ items: [{ type: 'Notebook', quantity: 1 }], observation: '' });
     } catch (err) {
       alert("Erro ao criar pedido.");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleAddItem = () => {
+    setNewDirectOrder({
+      ...newDirectOrder,
+      items: [...newDirectOrder.items, { type: 'Notebook', quantity: 1 }]
+    });
+  };
+
+  const handleRemoveItem = (index: number) => {
+    if (newDirectOrder.items.length === 1) return;
+    const newItems = [...newDirectOrder.items];
+    newItems.splice(index, 1);
+    setNewDirectOrder({ ...newDirectOrder, items: newItems });
+  };
+
+  const handleUpdateItem = (index: number, field: 'type' | 'quantity', value: any) => {
+    const newItems = [...newDirectOrder.items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setNewDirectOrder({ ...newDirectOrder, items: newItems });
   };
 
   const handleReopenOrder = async () => {
@@ -641,20 +672,56 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                  <button onClick={() => setShowDirectOrderModal(false)} className="p-2 hover:bg-white/10 rounded-full"><X className="w-6 h-6" /></button>
               </div>
               <form onSubmit={handleCreateDirectOrder} className="p-10 space-y-6">
-                 <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Equipamento</label>
-                    <select 
-                      className="w-full p-4 rounded-2xl bg-slate-50 border-none outline-none font-bold appearance-none"
-                      value={newDirectOrder.type}
-                      onChange={e => setNewDirectOrder({...newDirectOrder, type: e.target.value as AssetType})}
-                    >
-                      {(assetTypeConfigs.length > 0 ? assetTypeConfigs.map(t => t.name) : ASSET_TYPES).map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                 <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Itens do Pedido</label>
+                      <button 
+                        type="button" 
+                        onClick={handleAddItem}
+                        className="text-[10px] font-black uppercase text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" /> Adicionar Item
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-3 max-h-60 overflow-y-auto custom-scrollbar pr-2">
+                      {newDirectOrder.items.map((item, idx) => (
+                        <div key={idx} className="flex gap-3 items-center bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                          <div className="flex-1">
+                            <select 
+                              className="w-full p-3 rounded-xl bg-white border border-slate-200 outline-none font-bold text-xs appearance-none"
+                              value={item.type}
+                              onChange={e => handleUpdateItem(idx, 'type', e.target.value as AssetType)}
+                            >
+                              {(assetTypeConfigs.length > 0 ? assetTypeConfigs.map(t => t.name) : ASSET_TYPES).map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                          <div className="w-20">
+                            <input 
+                              type="number" 
+                              min="1"
+                              className="w-full p-3 rounded-xl bg-white border border-slate-200 outline-none font-bold text-xs text-center"
+                              value={item.quantity}
+                              onChange={e => handleUpdateItem(idx, 'quantity', parseInt(e.target.value) || 1)}
+                            />
+                          </div>
+                          {newDirectOrder.items.length > 1 && (
+                            <button 
+                              type="button" 
+                              onClick={() => handleRemoveItem(idx)}
+                              className="p-3 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                  </div>
                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Observações</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Observações Gerais</label>
                     <textarea 
-                      className="w-full p-4 rounded-2xl border border-slate-200 bg-white font-bold h-32 outline-none"
+                      className="w-full p-4 rounded-2xl border border-slate-200 bg-white font-bold h-24 outline-none resize-none"
                       placeholder="Motivo da compra..."
                       value={newDirectOrder.observation}
                       onChange={e => setNewDirectOrder({...newDirectOrder, observation: e.target.value})}
