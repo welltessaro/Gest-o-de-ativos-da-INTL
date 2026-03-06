@@ -486,6 +486,12 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                       <p className="text-xs font-bold text-slate-600">Para: {getEmployeeName(currentRequest.employeeId)}</p>
                    </div>
                 </div>
+                {currentRequest.observation && (
+                  <div className="mt-4 pt-4 border-t border-slate-200">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1 tracking-widest">Observações Gerais</p>
+                    <p className="text-xs font-medium text-slate-700 italic">"{currentRequest.observation}"</p>
+                  </div>
+                )}
               </div>
 
               {/* ETAPA 1: COTAÇÕES */}
