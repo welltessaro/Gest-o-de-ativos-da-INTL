@@ -27,7 +27,8 @@ import {
   Clock,
   Ban,
   Lock,
-  PenTool
+  PenTool,
+  RotateCcw
 } from 'lucide-react';
 import { EquipmentRequest, Employee, ItemFulfillment, Quotation, Asset, HistoryEntry, AssetType, AssetTypeConfig, UserAccount } from '../types';
 import { ASSET_TYPES } from '../constants';
@@ -281,6 +282,55 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
     }
   };
 
+  const handleReopenOrder = async () => {
+    if (!isApprover) {
+      alert("Acesso Negado: Apenas perfis com permissão de APROVAÇÃO podem reabrir pedidos.");
+      return;
+    }
+    if (!currentRequest || activeSelection === null) return;
+    
+    if (!window.confirm("Deseja reabrir este pedido? Ele voltará para o status de Cotação Pendente.")) return;
+
+    const newFulfillments = [...(currentRequest.itemFulfillments || [])];
+    newFulfillments[activeSelection.fIndex] = { 
+      ...newFulfillments[activeSelection.fIndex], 
+      purchaseStatus: 'Pendente',
+      approvedQuotationIndex: undefined
+    };
+    await onUpdateRequest({ ...currentRequest, itemFulfillments: newFulfillments });
+  };
+
+  const handleUndoAuthorization = async () => {
+    if (!isApprover) {
+      alert("Acesso Negado: Apenas perfis com permissão de APROVAÇÃO podem cancelar autorizações.");
+      return;
+    }
+    if (!currentRequest || activeSelection === null) return;
+
+    if (!window.confirm("Deseja cancelar a autorização e voltar para a seleção de cotação?")) return;
+
+    const newFulfillments = [...(currentRequest.itemFulfillments || [])];
+    newFulfillments[activeSelection.fIndex] = { 
+      ...newFulfillments[activeSelection.fIndex], 
+      purchaseStatus: 'Cotação Aprovada'
+    };
+    await onUpdateRequest({ ...currentRequest, itemFulfillments: newFulfillments });
+  };
+
+  const handleUndoQuoteSelection = async () => {
+    if (!currentRequest || activeSelection === null) return;
+
+    if (!window.confirm("Deseja cancelar a seleção do fornecedor e voltar para as cotações?")) return;
+
+    const newFulfillments = [...(currentRequest.itemFulfillments || [])];
+    newFulfillments[activeSelection.fIndex] = { 
+      ...newFulfillments[activeSelection.fIndex], 
+      purchaseStatus: 'Pendente',
+      approvedQuotationIndex: undefined
+    };
+    await onUpdateRequest({ ...currentRequest, itemFulfillments: newFulfillments });
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
@@ -484,6 +534,13 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                           <CheckSquare className="w-5 h-5" /> Autorizar Pedido
                         </button>
                      </div>
+                     
+                     <button 
+                       onClick={handleUndoQuoteSelection}
+                       className="mt-4 w-full text-white/60 hover:text-white font-bold py-2 uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-all"
+                     >
+                        <RotateCcw className="w-3 h-3" /> Alterar Cotação Escolhida
+                     </button>
                   </div>
                 </div>
               )}
@@ -512,6 +569,15 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                      >
                         <Truck className="w-6 h-6" /> Confirmar Pagamento e Envio
                      </button>
+
+                     {isApprover && (
+                        <button 
+                          onClick={handleUndoAuthorization}
+                          className="mt-4 w-full bg-indigo-800/20 hover:bg-indigo-800/30 text-white font-black py-3 rounded-[1.5rem] uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-all"
+                        >
+                           <RotateCcw className="w-4 h-4" /> Cancelar Autorização (Voltar)
+                        </button>
+                     )}
                   </div>
                 </div>
               )}
@@ -546,6 +612,15 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                   <div className="bg-rose-100 rounded-[2.5rem] p-10 text-rose-800 shadow-sm text-center border border-rose-200">
                      <X className="w-16 h-16 mx-auto mb-6 opacity-50" />
                      <p className="font-bold">Este pedido foi negado pela diretoria e encerrado.</p>
+                     
+                     {isApprover && (
+                        <button 
+                          onClick={handleReopenOrder}
+                          className="mt-6 flex items-center justify-center gap-2 mx-auto bg-white text-rose-600 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-sm hover:bg-rose-50 transition-all"
+                        >
+                          <RotateCcw className="w-4 h-4" /> Reabrir Pedido
+                        </button>
+                     )}
                   </div>
                 </div>
               )}
