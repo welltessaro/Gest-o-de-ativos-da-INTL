@@ -362,6 +362,23 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
     await onUpdateRequest({ ...currentRequest, itemFulfillments: newFulfillments });
   };
 
+  const handleUndoPurchase = async () => {
+    if (!isBuyer) {
+      alert("Acesso Negado: Apenas perfis com permissão de COMPRA (Financeiro/Compras) podem cancelar compras.");
+      return;
+    }
+    if (!currentRequest || activeSelection === null) return;
+
+    if (!window.confirm("Deseja cancelar a compra e voltar para o status de Autorizado?")) return;
+
+    const newFulfillments = [...(currentRequest.itemFulfillments || [])];
+    newFulfillments[activeSelection.fIndex] = { 
+      ...newFulfillments[activeSelection.fIndex], 
+      purchaseStatus: 'Pedido Autorizado'
+    };
+    await onUpdateRequest({ ...currentRequest, itemFulfillments: newFulfillments });
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
@@ -629,6 +646,15 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                      >
                         Registrar Recebimento
                      </button>
+
+                     {isBuyer && (
+                        <button 
+                          onClick={handleUndoPurchase}
+                          className="mt-4 w-full bg-emerald-800/20 hover:bg-emerald-800/30 text-white font-black py-3 rounded-[1.5rem] uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 transition-all"
+                        >
+                           <RotateCcw className="w-4 h-4" /> Cancelar Compra (Voltar)
+                        </button>
+                     )}
                   </div>
                 </div>
               )}
