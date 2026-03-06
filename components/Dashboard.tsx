@@ -33,7 +33,7 @@ interface DashboardProps {
 
 const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#4f46e5'];
 
-type DetailType = 'total' | 'in-use' | 'maintenance' | 'retired' | 'value' | null;
+type DetailType = 'total' | 'in-use' | 'maintenance' | 'retired' | 'value' | 'free' | null;
 
 const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees, departments = [], assetTypeConfigs, accounts }) => {
   const [selectedDetail, setSelectedDetail] = useState<DetailType>(null);
@@ -75,6 +75,7 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees, depa
   const mainStats = [
     { id: 'total' as DetailType, label: 'Ativos Operacionais', value: activeAssets.length, icon: Layers, color: 'text-blue-700', bg: 'bg-blue-100' },
     { id: 'in-use' as DetailType, label: 'Em Uso', value: validAssets.filter(a => a.status === 'Em Uso').length, icon: ShieldCheck, color: 'text-emerald-700', bg: 'bg-emerald-100' },
+    { id: 'free' as DetailType, label: 'Ativos Livres', value: validAssets.filter(a => a.status === 'Disponível').length, icon: Package, color: 'text-cyan-700', bg: 'bg-cyan-100' },
     { id: 'value' as DetailType, label: 'Valor Patrimonial', value: financialData.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }), icon: DollarSign, color: 'text-violet-700', bg: 'bg-violet-100' },
     { id: 'maintenance' as DetailType, label: 'Em Manutenção', value: validAssets.filter(a => a.status === 'Manutenção').length, icon: Activity, color: 'text-amber-700', bg: 'bg-amber-100' },
   ];
@@ -274,6 +275,7 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees, depa
                     <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-xl">
                        {selectedDetail === 'total' && <Layers className="w-7 h-7" />}
                        {selectedDetail === 'in-use' && <ShieldCheck className="w-7 h-7" />}
+                       {selectedDetail === 'free' && <Package className="w-7 h-7" />}
                        {selectedDetail === 'maintenance' && <Activity className="w-7 h-7" />}
                        {selectedDetail === 'retired' && <AlertTriangle className="w-7 h-7" />}
                        {selectedDetail === 'value' && <DollarSign className="w-7 h-7" />}
@@ -282,6 +284,7 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees, depa
                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">
                           {selectedDetail === 'total' && 'Relatório de Ativos Operacionais'}
                           {selectedDetail === 'in-use' && 'Ativos Alocados'}
+                          {selectedDetail === 'free' && 'Estoque Disponível'}
                           {selectedDetail === 'maintenance' && 'Centro de Manutenção'}
                           {selectedDetail === 'retired' && 'Arquivo de Baixas'}
                           {selectedDetail === 'value' && 'Valor Geral de Ativos'}
@@ -298,6 +301,38 @@ const Dashboard: React.FC<DashboardProps> = ({ assets, requests, employees, depa
               </div>
 
               <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-white">
+                {selectedDetail === 'free' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {validAssets.filter(a => a.status === 'Disponível').map(asset => (
+                      <div key={asset.id} className="p-6 bg-cyan-50 rounded-[2rem] border border-cyan-100 hover:shadow-md transition-all group">
+                         <div className="flex items-center gap-4 mb-4">
+                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-cyan-600 shadow-sm">
+                               <Package className="w-6 h-6" />
+                            </div>
+                            <div>
+                               <p className="text-xs font-black text-cyan-800 uppercase tracking-widest">{asset.type}</p>
+                               <p className="text-sm font-bold text-slate-700">{asset.brand} {asset.model}</p>
+                            </div>
+                         </div>
+                         <div className="space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-cyan-200 pb-2">
+                               <span>Patrimônio</span>
+                               <span className="text-slate-800">{asset.id}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest pt-1">
+                               <span>Valor</span>
+                               <span className="text-slate-800">{asset.purchaseValue?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'R$ 0,00'}</span>
+                            </div>
+                         </div>
+                      </div>
+                    ))}
+                    {validAssets.filter(a => a.status === 'Disponível').length === 0 && (
+                       <div className="col-span-full py-20 text-center text-slate-400 font-bold uppercase text-xs opacity-50">
+                          Nenhum ativo disponível em estoque no momento.
+                       </div>
+                    )}
+                  </div>
+                )}
                 {selectedDetail === 'total' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {chartData.map((item, idx) => (
