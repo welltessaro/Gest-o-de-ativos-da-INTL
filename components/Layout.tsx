@@ -148,6 +148,9 @@ const Layout: React.FC<LayoutProps> = ({
             <LogOut className="w-5 h-5" />
             <span>Sair do Sistema</span>
           </button>
+          <div className="mt-4 text-center text-[10px] text-slate-600 font-mono">
+            v1.0.0 (Stable)
+          </div>
         </div>
       </aside>
 
