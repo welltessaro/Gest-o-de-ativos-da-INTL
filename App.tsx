@@ -468,6 +468,7 @@ const App: React.FC = () => {
       notifications={notifications}
       onMarkAsRead={markNotificationAsRead}
       onClearAll={clearNotifications}
+      isOffline={isOffline}
     >
       {isOffline && (
         <div className="mb-6 bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center gap-3 text-amber-800 animate-bounce">

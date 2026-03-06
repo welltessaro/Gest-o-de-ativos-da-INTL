@@ -38,11 +38,12 @@ interface LayoutProps {
   notifications: AppNotification[];
   onMarkAsRead: (id: string) => void;
   onClearAll: () => void;
+  isOffline?: boolean;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
   children, activeTab, setActiveTab, currentUser, onLogout, 
-  requests, notifications, onMarkAsRead, onClearAll 
+  requests, notifications, onMarkAsRead, onClearAll, isOffline = false
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -148,8 +149,11 @@ const Layout: React.FC<LayoutProps> = ({
             <LogOut className="w-5 h-5" />
             <span>Sair do Sistema</span>
           </button>
-          <div className="mt-4 text-center text-[10px] text-slate-600 font-mono">
-            v1.0.0 (Stable)
+          <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-slate-600 font-mono">
+            <div className={`w-2 h-2 rounded-full ${isOffline ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`} />
+            <span>{isOffline ? 'Offline Mode' : 'System Online'}</span>
+            <span className="mx-1">•</span>
+            <span>v1.0.0 (Stable)</span>
           </div>
         </div>
       </aside>
