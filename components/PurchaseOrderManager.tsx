@@ -59,6 +59,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
   const [showDirectOrderModal, setShowDirectOrderModal] = useState(false);
   const [showReceiptForm, setShowReceiptForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deliveryForecastDate, setDeliveryForecastDate] = useState('');
   
   // VERIFICAÇÃO DE PERMISSÕES (SEGREGAÇÃO DE FUNÇÃO)
   // Admin sempre tem todas as permissões
@@ -179,8 +180,13 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
     const req = requests.find(r => r.id === requestId);
     if (!req) return;
     const newFulfillments = [...(req.itemFulfillments || [])];
-    newFulfillments[fIndex] = { ...newFulfillments[fIndex], purchaseStatus: 'Comprado' };
+    newFulfillments[fIndex] = { 
+      ...newFulfillments[fIndex], 
+      purchaseStatus: 'Comprado',
+      deliveryForecastDate: deliveryForecastDate || undefined
+    };
     await onUpdateRequest({ ...req, itemFulfillments: newFulfillments });
+    setDeliveryForecastDate('');
   };
 
   const handleOpenReceipt = () => {
@@ -609,6 +615,31 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                   <div className={`rounded-[2.5rem] p-10 text-white shadow-xl text-center ${isBuyer ? 'bg-indigo-600' : 'bg-slate-400'}`}>
                      <p className="text-sm font-bold mb-8">O pedido foi autorizado. Realize o pagamento e confirme o envio abaixo.</p>
                      
+                     {currentFulfillment.quotations && currentFulfillment.approvedQuotationIndex !== undefined && currentFulfillment.quotations[currentFulfillment.approvedQuotationIndex] && (
+                        <div className="bg-white/10 p-4 rounded-xl mb-6 text-left">
+                           <p className="text-xs font-black uppercase tracking-widest mb-2 opacity-70">Link de Compra Aprovado</p>
+                           <a 
+                             href={currentFulfillment.quotations[currentFulfillment.approvedQuotationIndex].url} 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             className="text-sm font-bold text-white hover:underline break-all"
+                           >
+                             {currentFulfillment.quotations[currentFulfillment.approvedQuotationIndex].url}
+                           </a>
+                        </div>
+                     )}
+
+                     <div className="bg-white/10 p-4 rounded-xl mb-8 text-left">
+                        <label className="block text-xs font-black uppercase tracking-widest mb-2 opacity-70">Previsão de Entrega</label>
+                        <input 
+                          type="date" 
+                          value={deliveryForecastDate}
+                          onChange={(e) => setDeliveryForecastDate(e.target.value)}
+                          disabled={!isBuyer}
+                          className="w-full bg-white/20 border-none rounded-xl p-3 text-white placeholder-white/50 focus:ring-2 focus:ring-white disabled:opacity-50"
+                        />
+                     </div>
+
                      {!isBuyer && (
                         <div className="bg-white/20 p-4 rounded-xl flex items-center justify-center gap-3 mb-8">
                            <Lock className="w-5 h-5 text-white" />
@@ -646,6 +677,30 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({
                   <div className="bg-emerald-600 rounded-[2.5rem] p-10 text-white shadow-xl text-center">
                      <Package className="w-16 h-16 mx-auto mb-6 animate-bounce" />
                      <p className="font-bold mb-8">O item está a caminho. Clique abaixo ao recebê-lo fisicamente.</p>
+                     
+                     {currentFulfillment.quotations && currentFulfillment.approvedQuotationIndex !== undefined && currentFulfillment.quotations[currentFulfillment.approvedQuotationIndex] && (
+                        <div className="bg-white/10 p-4 rounded-xl mb-6 text-left">
+                           <p className="text-xs font-black uppercase tracking-widest mb-2 opacity-70">Link de Compra</p>
+                           <a 
+                             href={currentFulfillment.quotations[currentFulfillment.approvedQuotationIndex].url} 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             className="text-sm font-bold text-white hover:underline break-all"
+                           >
+                             {currentFulfillment.quotations[currentFulfillment.approvedQuotationIndex].url}
+                           </a>
+                        </div>
+                     )}
+
+                     {currentFulfillment.deliveryForecastDate && (
+                        <div className="bg-white/10 p-4 rounded-xl mb-8 text-left">
+                           <p className="text-xs font-black uppercase tracking-widest mb-2 opacity-70">Previsão de Entrega</p>
+                           <p className="text-lg font-bold text-white">
+                              {new Date(currentFulfillment.deliveryForecastDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                           </p>
+                        </div>
+                     )}
+
                      <button 
                       onClick={handleOpenReceipt}
                       className="w-full bg-white text-emerald-600 font-black py-5 rounded-[2rem] shadow-xl uppercase tracking-widest text-xs"
